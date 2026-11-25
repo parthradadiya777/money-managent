@@ -49,7 +49,7 @@ const Map<String,List<String>> fields = {
  'Daily Orders':['Date','Platform','Firm / Account','Order ID','SKU / Product','Brand','Size','Color','Orders Qty','Gross Order Value','Delivered Qty','Delivered Sales','Commission / Fees','Shipping Fees','Other Deductions','Courier','AWB / Tracking No.','Customer','Pincode','Source PDF','PDF Page'],
  'Returns & RTO':['Date','Platform','Firm / Account','Order ID','SKU / Product','Type','Qty','Refund / Loss Amount','Return Shipping','Reason','Status'],
  'Purchases':['Purchase Date','Firm / GST Entity','Vendor Name','Invoice No.','SKU / Product','Qty','Taxable Value','GST %','GST Amount','Invoice Total','Paid Amount','Balance Due'],
- 'Vendor Payments':['Payment Date','Firm / GST Entity','Vendor Name','Purchase Invoice No.','Payment Mode','Reference / UTR','Amount Paid','Notes'],
+ 'Vendor Payments':['Payment Date','Firm Name','Vendor Name','Payment Mode','Amount Paid','Notes'],
  'Settlements':['Settlement Date','Platform','Firm / Account','Settlement ID','Period From','Period To','Gross Sales','Refunds / RTO','Fees / Deductions','Net Payable','Bank Received','Difference','Bank Reference'],
  'Bank Transactions':['Date','Bank Account','Firm / GST Entity','Description','Type','Category','Reference / UTR','Credit','Debit'],
  'Expenses':['Date','Firm / GST Entity','Category','Description','Vendor / Paid To','Payment Mode','Amount','GST Amount','Invoice No.'],
@@ -411,7 +411,7 @@ class _BusinessHomeState extends State<BusinessHome> {
    const SizedBox(height:14),
    Wrap(spacing:10,runSpacing:10,children:[
     FilledButton.icon(onPressed:()=>_addRecord(module),icon:const Icon(Icons.add),label:const Text('Add Manually')),
-    if(!isDaily)...[
+    if(!isDaily&&module!='Vendor Payments')...[
      OutlinedButton.icon(onPressed:()=>_importExcel(module),icon:const Icon(Icons.file_upload_outlined),label:const Text('Import Excel')),
      OutlinedButton.icon(onPressed:()=>_exportExcel(module),icon:const Icon(Icons.file_download_outlined),label:const Text('Export Excel')),
     ],
@@ -651,12 +651,12 @@ class _BusinessHomeState extends State<BusinessHome> {
     final saved = rows('Masters').where((r) => '${r['Record Type']}'.toLowerCase() == 'platform').map((r) => '${r['Name']}'.trim()).where((v) => v.isNotEmpty);
     return {...platforms, ...saved}.toList();
   }
-  if (normalized.contains('firm') || normalized.contains('account') || normalized.contains('gst entity')) {
+  if (module!='Vendor Payments' && (normalized.contains('firm') || normalized.contains('account') || normalized.contains('gst entity'))) {
     return rows('Masters').where((r) => '${r['Record Type']}'.toLowerCase() == 'firm').map((r) => '${r['Name']}'.trim()).where((v) => v.isNotEmpty).toSet().toList();
   }
   if (normalized == 'type') return ['Return', 'RTO'];
   if (normalized == 'status') return ['Pending', 'Completed', 'On Hold', 'Cancelled'];
-  if (normalized.contains('payment mode')) return ['Bank Transfer', 'UPI', 'Cash', 'Cheque', 'Other'];
+  if (normalized.contains('payment mode')) return ['Bank Transfer', 'UPI', 'Cash', 'Cheque', 'Credit', 'Other'];
   if (normalized == 'record type') return ['Firm', 'Platform', 'Vendor', 'Bank Account', 'Expense Category'];
   if (normalized == 'state') return ['Gujarat', 'Maharashtra', 'Rajasthan', 'Delhi', 'Karnataka', 'Other'];
   if (normalized == 'gst %') return ['0', '5', '12', '18', '28'];
@@ -666,6 +666,19 @@ class _BusinessHomeState extends State<BusinessHome> {
   return const [];
  }
  Widget _formField(String module, String field, TextEditingController controller) {
+  if(module=='Vendor Payments' && field=='Payment Date'){
+   DateTime? selectedDate;
+   try{selectedDate=DateTime.tryParse(controller.text);}catch(_){}
+   return Padding(padding:const EdgeInsets.only(bottom:12),child:InkWell(
+    onTap:()async{
+     final now=DateTime.now();
+     final initial=selectedDate??now;
+     final picked=await showDatePicker(context:context,initialDate:initial,firstDate:DateTime(2000),lastDate:DateTime(2100),builder:(ctx,child)=>Theme(data:Theme.of(ctx).copyWith(colorScheme:const ColorScheme.light(primary:Color(0xFFD6A52A),onPrimary:Colors.black)),child:child!));
+     if(picked!=null)controller.text='${picked.year.toString().padLeft(4,'0')}-${picked.month.toString().padLeft(2,'0')}-${picked.day.toString().padLeft(2,'0')}';
+    },
+    child:InputDecorator(decoration:const InputDecoration(labelText:'Payment Date',prefixIcon:Icon(Icons.calendar_month_rounded),suffixIcon:Icon(Icons.arrow_drop_down)),child:Text(controller.text.isEmpty?'Choose payment date':controller.text,style:TextStyle(color:controller.text.isEmpty?Colors.black45:Colors.black87))),
+   ));
+  }
   final options = _optionsFor(module, field);
   final dropdown = options.isEmpty ? const SizedBox.shrink() : Padding(
    padding: const EdgeInsets.only(bottom: 7),
