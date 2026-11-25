@@ -1,4 +1,4 @@
-name: Flutter multi-platform builds
+name: Flutter Web and Desktop builds
 
 on:
   push:
@@ -22,45 +22,6 @@ jobs:
         with:
           name: digitechified-business-manager-web
           path: build/web
-
-  android:
-    name: Build Android APK
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-      - run: rm -rf android
-      - run: flutter create --platforms=android --org com.digitechified --project-name business_manager .
-      - name: Set Android API level 36 for app and plugin modules
-        shell: bash
-        run: |
-          sed -i 's/compileSdk = .*/compileSdk = 36/' android/app/build.gradle.kts
-          cat >> android/build.gradle.kts <<'EOF'
-
-          // Set compile SDK as each Android library plugin is applied.
-          subprojects {
-              plugins.withId("com.android.library") {
-                  val androidExtension = extensions.findByName("android")
-                  if (androidExtension != null) {
-                      val setter = androidExtension.javaClass.methods.firstOrNull {
-                          (it.name == "compileSdkVersion" || it.name == "setCompileSdkVersion") &&
-                          it.parameterTypes.size == 1 &&
-                          (it.parameterTypes[0] == Int::class.javaPrimitiveType || it.parameterTypes[0] == Int::class.java)
-                      }
-                      setter?.invoke(androidExtension, 36)
-                  }
-              }
-          }
-          EOF
-          grep -n 'compileSdk' android/app/build.gradle.kts
-      - run: flutter pub get
-      - run: flutter build apk --release --dart-define=APP_ENV=test --dart-define=API_BASE_URL=https://digitechified-bm-test-api.onrender.com
-      - uses: actions/upload-artifact@v4
-        with:
-          name: digitechified-business-manager-android-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
 
   windows:
     name: Build Windows Desktop
