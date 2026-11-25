@@ -127,31 +127,31 @@ async def parse_label_pdf(
     for page_no, page in enumerate(reader.pages, start=1):
         text = page.extract_text() or ""
         # Only inspect the shipping-label portion; never use invoice data.
-        label = re.split(r"TAX\\s+INVOICE", text, flags=re.I)[0]
-        match = re.search(r"SKU\\s+Size\\s+Qty\\s+Color\\s+Order\\s+No\\.?\\s*(.*)", label, flags=re.I|re.S)
+        label = re.split(r"TAX\s+INVOICE", text, flags=re.I)[0]
+        match = re.search(r"SKU\s+Size\s+Qty\s+Color\s+Order\s+No\.?\s*(.*)", label, flags=re.I|re.S)
         if not match:
             # Some Myntra label layouts use a compact item row.
-            match = re.search(r"Product\\s+Details\\s*(.*)", label, flags=re.I|re.S)
+            match = re.search(r"Product\s+Details\s*(.*)", label, flags=re.I|re.S)
         if not match:
             skipped += 1
             continue
         section = match.group(1)
-        lines = [re.sub(r"\\s+", " ", x).strip() for x in section.splitlines() if x.strip()]
+        lines = [re.sub(r"\s+", " ", x).strip() for x in section.splitlines() if x.strip()]
         parsed = 0
         for line in lines:
             if re.search(r"^(SKU|Size|Qty|Color|Order No)", line, re.I):
                 continue
             # Common Meesho label row: SKU, size, quantity, color, marketplace order id.
-            row = re.match(r"^(\\S+)\\s+(.+?)\\s+(\\d+)\\s+([A-Za-z][A-Za-z -]*?)\\s+(\\d{12,}(?:_\\d+)?)$", line)
+            row = re.match(r"^(\S+)\s+(.+?)\s+(\d+)\s+([A-Za-z][A-Za-z -]*?)\s+(\d{12,}(?:_\d+)?)$", line)
             if not row:
                 continue
             sku, size, qty, color, order_id = row.groups()
             head = label[:match.start()]
-            courier_match = re.search(r"\\b(Delhivery|Shadowfax|Ecom Express|Blue Dart|Xpressbees|Ekart)\\b", head, re.I)
-            awb_match = re.search(r"(?<!\\d)(?:SF)?[A-Z0-9]{10,22}(?!\\w)", head)
-            customer_match = re.search(r"Customer Address\\s+(.+?)(?:\\s+If undelivered|\\s+COD:)", head, re.I|re.S)
-            customer = re.sub(r"\\s+", " ", customer_match.group(1)).strip() if customer_match else ""
-            pin_match = re.search(r"\\b(\\d{6})\\b", customer)
+            courier_match = re.search(r"\b(Delhivery|Shadowfax|Ecom Express|Blue Dart|Xpressbees|Ekart)\b", head, re.I)
+            awb_match = re.search(r"(?<!\d)(?:SF)?[A-Z0-9]{10,22}(?!\w)", head)
+            customer_match = re.search(r"Customer Address\s+(.+?)(?:\s+If undelivered|\s+COD:)", head, re.I|re.S)
+            customer = re.sub(r"\s+", " ", customer_match.group(1)).strip() if customer_match else ""
+            pin_match = re.search(r"\b(\d{6})\b", customer)
             records.append({
                 "Date": __import__("datetime").date.today().isoformat(),
                 "Platform": platform.strip(),
