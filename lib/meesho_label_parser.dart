@@ -11,7 +11,7 @@ class MeeshoLabelParser {
     final match = RegExp(r'^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$')
         .firstMatch(value.trim());
     if (match == null) return value.trim();
-    return '\${match.group(3)}-\${match.group(2)!.padLeft(2, '0')}-\${match.group(1)!.padLeft(2, '0')}';
+    return '${match.group(3)}-${match.group(2)!.padLeft(2, '0')}-${match.group(1)!.padLeft(2, '0')}';
   }
 
   static String _clean(String value) =>
@@ -158,7 +158,7 @@ class MeeshoLabelParser {
             'PDF Page': (pageIndex + 1).toString(),
             'Invoice No.': invoiceNo,
             'Product Description': description,
-            'Label ID': 'MEESHO-\$baseOrder-PAGE-\${pageIndex + 1}',
+            'Label ID': 'MEESHO-$baseOrder-PAGE-${pageIndex + 1}',
           });
         }
       }
