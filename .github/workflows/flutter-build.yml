@@ -67,3 +67,7 @@ jobs:
           python-version: '3.12'
       - run: pip install -r backend/requirements.txt
       - run: python -m compileall -q backend/app
+      - name: Smoke test deployed API (synthetic data only)
+        env:
+          API_BASE_URL: https://digitechified-bm-test-api.onrender.com
+        run: python backend/smoke_test.py
