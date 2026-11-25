@@ -197,6 +197,10 @@ class BusinessHome extends StatefulWidget {
 }
 class _BusinessHomeState extends State<BusinessHome> {
  final Box box=Hive.box(hiveBoxName);
+ final TextEditingController _dailySearchController=TextEditingController();
+ int _dailyPage=0;
+ static const int _dailyPageSize=100;
+ bool _pdfImporting=false;
  int selected=0;
  String? _syncMessage;
  String money(num n)=>'₹${n.toStringAsFixed(2)}';
@@ -379,60 +383,80 @@ class _BusinessHomeState extends State<BusinessHome> {
  Widget _action(String label,IconData icon,int page)=>OutlinedButton.icon(onPressed:()=>setState(()=>selected=page),icon:Icon(icon,size:17),label:Text(label));
 
  Widget _modulePage(String module){
-  final data=rows(module),cols=fields[module]??[];
+  final allData=rows(module),cols=fields[module]??[];
+  final isDaily=module=='Daily Orders';
+  final query=isDaily?_dailySearchController.text.trim().toLowerCase():'';
+  final filtered=isDaily&&query.isNotEmpty
+    ? allData.where((row)=>row.values.any((v)=>'$v'.toLowerCase().contains(query))).toList()
+    : allData;
+  final pageCount=(filtered.length/_dailyPageSize).ceil();
+  if(isDaily&&pageCount>0&&_dailyPage>=pageCount)_dailyPage=pageCount-1;
+  if(isDaily&&_dailyPage<0)_dailyPage=0;
+  final startIndex=isDaily?_dailyPage*_dailyPageSize:0;
+  final visible=isDaily?filtered.skip(startIndex).take(_dailyPageSize).toList():filtered;
   return ListView(padding:const EdgeInsets.all(22),children:[
-   if (module == 'Daily Orders')
+   if (isDaily)
     Container(
      padding: const EdgeInsets.all(20),
-     decoration: BoxDecoration(
-      gradient: const LinearGradient(
-       colors: [Color(0xFF090909), Color(0xFF252525)],
-       begin: Alignment.topLeft, end: Alignment.bottomRight,
-      ),
-      borderRadius: BorderRadius.circular(18),
-     ),
-     child: Row(children: [
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-       Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(color: Colors.white.withOpacity(.13), borderRadius: BorderRadius.circular(20)),
-        child: const Text('PDF-FIRST WORKFLOW', style: TextStyle(color: Color(0xFFFFC44F), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
-       ),
-       const SizedBox(height: 10),
-       const Text('Daily Marketplace Orders', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-       const SizedBox(height: 5),
-       const Text('Upload Myntra or Meesho shipping labels. Orders are saved and shown instantly with date, platform and brand-wise totals.', style: TextStyle(color: Color(0xFFE8E3D5), height: 1.4)),
+     decoration: BoxDecoration(gradient:const LinearGradient(colors:[Color(0xFF090909),Color(0xFF252525)]),borderRadius:BorderRadius.circular(18)),
+     child:Row(children:[
+      Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+       Container(padding:const EdgeInsets.symmetric(horizontal:10,vertical:5),decoration:BoxDecoration(color:Colors.white.withOpacity(.13),borderRadius:BorderRadius.circular(20)),child:const Text('PDF-FIRST WORKFLOW',style:TextStyle(color:Color(0xFFFFC44F),fontSize:10,fontWeight:FontWeight.bold,letterSpacing:1))),
+       const SizedBox(height:10),const Text('Daily Marketplace Orders',style:TextStyle(color:Colors.white,fontSize:20,fontWeight:FontWeight.bold)),
+       const SizedBox(height:5),const Text('Upload Myntra or Meesho shipping labels. Orders are saved instantly with date, platform and brand-wise totals.',style:TextStyle(color:Color(0xFFE8E3D5),height:1.4)),
       ])),
-      const SizedBox(width: 12),
-      Container(width: 54, height: 54, decoration: BoxDecoration(color: const Color(0xFFFFC44F).withOpacity(.15), borderRadius: BorderRadius.circular(16)), child: const Icon(Icons.picture_as_pdf_rounded, color: Color(0xFFFFC44F), size: 29)),
+      const SizedBox(width:12),Container(width:54,height:54,decoration:BoxDecoration(color:const Color(0xFFFFC44F).withOpacity(.15),borderRadius:BorderRadius.circular(16)),child:const Icon(Icons.picture_as_pdf_rounded,color:Color(0xFFFFC44F),size:29)),
      ]),
-    )
-   else
-    Text('${data.length} records',style:const TextStyle(color:Colors.black54)),
+    ) else Text('${allData.length} records',style:const TextStyle(color:Colors.black54)),
    const SizedBox(height:14),
    Wrap(spacing:10,runSpacing:10,children:[
     FilledButton.icon(onPressed:()=>_addRecord(module),icon:const Icon(Icons.add),label:const Text('Add Manually')),
-    if(module != 'Daily Orders') ...[
+    if(!isDaily)...[
      OutlinedButton.icon(onPressed:()=>_importExcel(module),icon:const Icon(Icons.file_upload_outlined),label:const Text('Import Excel')),
      OutlinedButton.icon(onPressed:()=>_exportExcel(module),icon:const Icon(Icons.file_download_outlined),label:const Text('Export Excel')),
     ],
-    if(module=='Daily Orders') FilledButton.icon(onPressed:()=>_importShippingPdf(),icon:const Icon(Icons.picture_as_pdf_outlined),label:const Text('Upload Shipping Label PDF')),
+    if(isDaily)FilledButton.icon(onPressed:_pdfImporting?null:()=>_importShippingPdf(),icon:_pdfImporting?const SizedBox(width:16,height:16,child:CircularProgressIndicator(strokeWidth:2,color:Colors.white)):const Icon(Icons.picture_as_pdf_outlined),label:Text(_pdfImporting?'Importing PDF...':'Upload Shipping Label PDF')),
    ]),
-   const SizedBox(height:16),if(module=='Daily Orders')_dailyOrderSummary(data),if(module=='Masters')_masterHint(),
-   if(data.isEmpty)Container(padding:const EdgeInsets.all(32),decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(16)),child:const Column(children:[
-    Icon(Icons.inbox_outlined,size:42,color:Colors.black38),SizedBox(height:10),Text('No records yet',style:TextStyle(fontWeight:FontWeight.bold,fontSize:16)),
-    SizedBox(height:5),Text('Add a record manually or import an Excel workbook.',style:TextStyle(color:Colors.black54)),
+   const SizedBox(height:16),
+   if(isDaily)_dailyOrderSummary(allData),
+   if(isDaily)...[
+    const SizedBox(height:14),
+    TextField(controller:_dailySearchController, onChanged:(_){setState(()=>_dailyPage=0);},
+     decoration:InputDecoration(
+      hintText:'Search date, platform, firm, order ID, SKU, brand, customer...',
+      prefixIcon:const Icon(Icons.search,color:Color(0xFF9B7417)),
+      suffixIcon:_dailySearchController.text.isEmpty?null:IconButton(icon:const Icon(Icons.close),onPressed:(){_dailySearchController.clear();setState(()=>_dailyPage=0);}),
+      filled:true,fillColor:Colors.white,border:OutlineInputBorder(borderRadius:BorderRadius.circular(14),borderSide:const BorderSide(color:Color(0xFFE5DFD2))),
+     )),
+    const SizedBox(height:8),
+    Row(children:[
+     Expanded(child:Text('${filtered.length} records found • Showing ${filtered.isEmpty?0:startIndex+1}-${(startIndex+visible.length)}',style:const TextStyle(color:Colors.black54,fontSize:12))),
+     const Text('100 per page',style:TextStyle(color:Color(0xFF8A6818),fontSize:12,fontWeight:FontWeight.w600)),
+    ]),
+   ],
+   if(module=='Masters')_masterHint(),
+   if(filtered.isEmpty)Container(padding:const EdgeInsets.all(32),decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(16)),child:Column(children:[
+    const Icon(Icons.inbox_outlined,size:42,color:Colors.black38),const SizedBox(height:10),
+    Text(isDaily&&query.isNotEmpty?'No matching orders':'No records yet',style:const TextStyle(fontWeight:FontWeight.bold,fontSize:16)),
+    const SizedBox(height:5),const Text('Try another search or add a record.',style:TextStyle(color:Colors.black54)),
    ])) else Card(color:Colors.white,elevation:0,child:SingleChildScrollView(scrollDirection:Axis.horizontal,child:DataTable(
-    columns:[...cols.take(6).map((c)=>DataColumn(label:Text(c,style:const TextStyle(fontWeight:FontWeight.bold)))),const DataColumn(label:Text('Action'))],
-    rows:data.asMap().entries.map((entry){final idx=entry.key,row=entry.value;return DataRow(cells:[
-     ...cols.take(6).map((c)=>DataCell(Text('${row[c]??''}',maxLines:1,overflow:TextOverflow.ellipsis))),
-     DataCell(Row(mainAxisSize:MainAxisSize.min,children:[
-      IconButton(tooltip:'Edit record',icon:const Icon(Icons.edit_outlined,color:Color(0xFF2457C5)),onPressed:()=>_editRecord(module,idx)),
-      IconButton(tooltip:'Delete record',icon:const Icon(Icons.delete_outline,color:Colors.red),onPressed:()=>_deleteRecord(module,idx)),
-     ])),
-    ]);}).toList(),
+    columns:[...cols.take(6).map((col)=>DataColumn(label:Text(col,style:const TextStyle(fontWeight:FontWeight.bold)))),const DataColumn(label:Text('Action'))],
+    rows:visible.map((row){
+     final idx=allData.indexOf(row);
+     return DataRow(cells:[
+      ...cols.take(6).map((col)=>DataCell(Text('${row[col]??''}',maxLines:1,overflow:TextOverflow.ellipsis))),
+      DataCell(Row(mainAxisSize:MainAxisSize.min,children:[
+       IconButton(tooltip:'Edit record',icon:const Icon(Icons.edit_outlined,color:Color(0xFF2457C5)),onPressed:()=>_editRecord(module,idx)),
+       IconButton(tooltip:'Delete record',icon:const Icon(Icons.delete_outline,color:Colors.red),onPressed:()=>_deleteRecord(module,idx)),
+      ])),
+     ]);
+    }).toList(),
    ))),
-
+   if(isDaily&&pageCount>1)Padding(padding:const EdgeInsets.symmetric(vertical:14),child:Row(mainAxisAlignment:MainAxisAlignment.center,children:[
+    OutlinedButton.icon(onPressed:_dailyPage>0?()=>setState(()=>_dailyPage--):null,icon:const Icon(Icons.chevron_left),label:const Text('Previous')),
+    Padding(padding:const EdgeInsets.symmetric(horizontal:16),child:Text('Page ${_dailyPage+1} of $pageCount',style:const TextStyle(fontWeight:FontWeight.w600))),
+    OutlinedButton.icon(onPressed:_dailyPage<pageCount-1?()=>setState(()=>_dailyPage++):null,icon:const Icon(Icons.chevron_right),label:const Text('Next')),
+   ])),
   ]);
  }
 
@@ -503,48 +527,86 @@ class _BusinessHomeState extends State<BusinessHome> {
  Widget _masterHint()=>Container(padding:const EdgeInsets.all(12),margin:const EdgeInsets.only(bottom:12),decoration:BoxDecoration(color:const Color(0xFFEAF2FF),borderRadius:BorderRadius.circular(12)),child:const Text('Add firms, GSTINs and vendor details here. Starter examples: Demo Fashion Store, Demo Home Store, Demo Myntra Store and all five marketplaces.',style:TextStyle(color:Color(0xFF24477E))));
 
  Future<void> _importShippingPdf() async {
-  String platform = 'Myntra';
-  final selectedPlatform = await showDialog<String>(
-    context: context,
-    builder: (ctx) => StatefulBuilder(builder:(ctx,setDialog)=>Dialog(
-      backgroundColor:const Color(0xFFF9F7F1),
-      shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(24)),
-      child:Padding(padding:const EdgeInsets.all(22),child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-       Row(children:[Container(width:46,height:46,decoration:BoxDecoration(color:const Color(0xFF111111),borderRadius:BorderRadius.circular(14)),child:const Icon(Icons.picture_as_pdf_rounded,color:Color(0xFFFFC84D))),const SizedBox(width:12),const Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('Import shipping labels',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold)),Text('Select marketplace PDF',style:TextStyle(color:Colors.black54,fontSize:12))]))]),
-       const SizedBox(height:22),
-       DropdownButtonFormField<String>(value:platform,isExpanded:true,decoration:const InputDecoration(labelText:'Marketplace',prefixIcon:Icon(Icons.storefront_outlined)),items:const ['Myntra','Meesho'].map((v)=>DropdownMenuItem(value:v,child:Text(v))).toList(),onChanged:(v){if(v!=null)setDialog(()=>platform=v);}),
-       const SizedBox(height:18),
-       Row(children:[Expanded(child:TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('Cancel'))),const SizedBox(width:8),Expanded(child:FilledButton.icon(onPressed:()=>Navigator.pop(ctx,platform),icon:const Icon(Icons.folder_open_rounded),label:const Text('Choose PDF')))])
-      ]))
-    )),
+  if(_pdfImporting)return;
+  String platform='Myntra';
+  final selectedPlatform=await showDialog<String>(
+   context:context,
+   builder:(ctx)=>StatefulBuilder(builder:(ctx,setDialog)=>Dialog(
+    backgroundColor:const Color(0xFFF9F7F1),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(24)),
+    child:Padding(padding:const EdgeInsets.all(24),child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+     Row(children:[
+      Container(width:48,height:48,decoration:BoxDecoration(color:const Color(0xFF080808),borderRadius:BorderRadius.circular(14)),child:const Icon(Icons.picture_as_pdf_rounded,color:Color(0xFFFFC44F))),
+      const SizedBox(width:12),const Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+       Text('Import marketplace PDF',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold,color:Color(0xFF171717))),
+       SizedBox(height:3),Text('Choose the platform for these shipping labels',style:TextStyle(fontSize:12,color:Colors.black54)),
+      ])),
+     ]),
+     const SizedBox(height:22),
+     DropdownButtonFormField<String>(value:platform,isExpanded:true,decoration:const InputDecoration(labelText:'Marketplace',prefixIcon:Icon(Icons.storefront_outlined)),items:const ['Myntra','Meesho'].map((v)=>DropdownMenuItem(value:v,child:Text(v))).toList(),onChanged:(v){if(v!=null)setDialog(()=>platform=v);}),
+     const SizedBox(height:12),
+     Container(padding:const EdgeInsets.all(12),decoration:BoxDecoration(color:const Color(0xFFF1EBDD),borderRadius:BorderRadius.circular(12)),child:const Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      Icon(Icons.info_outline,color:Color(0xFF8A6818),size:18),SizedBox(width:8),Expanded(child:Text('Only shipping labels are counted. Myntra brand will be saved as JIPROSTORE.',style:TextStyle(fontSize:12,color:Color(0xFF5F512F)))),
+     ])),
+     const SizedBox(height:18),
+     Row(children:[
+      Expanded(child:TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('Cancel'))),
+      const SizedBox(width:10),
+      Expanded(flex:2,child:FilledButton.icon(onPressed:()=>Navigator.pop(ctx,platform),icon:const Icon(Icons.folder_open_rounded),label:const Text('Choose PDF'))),
+     ]),
+    ])),
+   )),
   );
   if(selectedPlatform==null)return;
-  try {
-   final picked=await FilePicker.platform.pickFiles(type:FileType.custom,allowedExtensions:['pdf'],withData:true);
-   if(picked==null)return;
-   final bytes=picked.files.single.bytes;
-   if(bytes==null||bytes.isEmpty)throw Exception('PDF file could not be read. Please choose the PDF again.');
+  final picked=await FilePicker.platform.pickFiles(type:FileType.custom,allowedExtensions:['pdf'],withData:true);
+  if(picked==null)return;
+  final bytes=picked.files.single.bytes;
+  if(bytes==null||bytes.isEmpty){
+   if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('PDF file could not be read. Please choose it again.')));
+   return;
+  }
+  setState(()=>_pdfImporting=true);
+  showDialog<void>(context:context,barrierDismissible:false,builder:(ctx)=>PopScope(canPop:false,child:Dialog(
+   backgroundColor:const Color(0xFFF9F7F1),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(22)),
+   child:Padding(padding:const EdgeInsets.all(26),child:Column(mainAxisSize:MainAxisSize.min,children:[
+    const SizedBox(width:42,height:42,child:CircularProgressIndicator(strokeWidth:3,color:Color(0xFFD6A52A))),
+    const SizedBox(height:18),const Text('Reading shipping labels...',style:TextStyle(fontWeight:FontWeight.bold,fontSize:16)),
+    const SizedBox(height:6),Text('Processing ${picked.files.single.name}',textAlign:TextAlign.center,style:const TextStyle(color:Colors.black54,fontSize:12)),
+    const SizedBox(height:4),const Text('Please wait. Do not close this window.',style:TextStyle(color:Colors.black54,fontSize:11)),
+   ])),
+  )));
+  await Future<void>.delayed(const Duration(milliseconds:120));
+  try{
    final imported=selectedPlatform=='Myntra'?MyntraLabelParser.parse(bytes):MeeshoLabelParser.parse(bytes);
    if(imported.isEmpty)throw Exception('No shipping labels detected. Please check the selected PDF.');
    final existing=rows('Daily Orders');
    final sourceName=picked.files.single.name;
+   final today=DateTime.now();
+   final importDate='${today.year.toString().padLeft(4,'0')}-${today.month.toString().padLeft(2,'0')}-${today.day.toString().padLeft(2,'0')}';
    for(final item in imported){
     item['Source PDF']=sourceName;
     item['Label ID']='$sourceName-${item['Label ID']}';
-    if(selectedPlatform=='Myntra')item['Brand']='JIPROSTORE';
-    if((item['Date']??'').toString().trim().isEmpty)item['Date']='Not detected';
+    if(selectedPlatform=='Myntra'){
+     item['Brand']='JIPROSTORE';
+     final parsedDate='${item['Date']??''}'.trim();
+     if(parsedDate.isEmpty||parsedDate=='Not detected')item['Date']=importDate;
+    }
    }
    final knownLabels=existing.map((e)=>'${e['Label ID']??''}').toSet();
    imported.removeWhere((e)=>knownLabels.contains('${e['Label ID']}'));
    if(imported.isEmpty)throw Exception('This PDF has already been imported.');
    await saveRows('Daily Orders',[...existing,...imported]);
    if(mounted){
-    setState((){});
+    setState(()=>_dailyPage=0);
     final labelCount=imported.map((e)=>e['Label ID']).toSet().length;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('$labelCount shipping labels and ${imported.length} SKU rows added. Daily Orders updated.')));
    }
   }catch(e){
    if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('PDF import failed: ${e.toString().replaceFirst('Exception: ','')}')));
+  }finally{
+   if(mounted){
+    Navigator.of(context,rootNavigator:true).pop();
+    setState(()=>_pdfImporting=false);
+   }
   }
  }
 
