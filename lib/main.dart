@@ -378,7 +378,7 @@ class _BusinessHomeState extends State<BusinessHome> {
    const SizedBox(height:12),if(data.isNotEmpty)Align(alignment:Alignment.centerRight,child:TextButton.icon(onPressed:()=>_exportExcel(module),icon:const Icon(Icons.download),label:const Text('Export Excel'))),
   ]);
  }
- Widget _masterHint()=>Container(padding:const EdgeInsets.all(12),margin:const EdgeInsets.only(bottom:12),decoration:BoxDecoration(color:const Color(0xFFEAF2FF),borderRadius:BorderRadius.circular(12)),child:const Text('Add firms, GSTINs and vendor details here. Starter examples: JPWels, House of Ishika, Jipro Store and all five marketplaces.',style:TextStyle(color:Color(0xFF24477E))));
+ Widget _masterHint()=>Container(padding:const EdgeInsets.all(12),margin:const EdgeInsets.only(bottom:12),decoration:BoxDecoration(color:const Color(0xFFEAF2FF),borderRadius:BorderRadius.circular(12)),child:const Text('Add firms, GSTINs and vendor details here. Starter examples: Demo Fashion Store, Demo Home Store, Demo Myntra Store and all five marketplaces.',style:TextStyle(color:Color(0xFF24477E))));
 
  Future<void> _quickAdd()async{
   final choice=await showModalBottomSheet<String>(context:context,builder:(c)=>SafeArea(child:Column(mainAxisSize:MainAxisSize.min,children:[
@@ -392,7 +392,7 @@ class _BusinessHomeState extends State<BusinessHome> {
   for(final f in fields[module]??[])controllers[f]=TextEditingController();
   for(final f in ['Date','Purchase Date','Payment Date','Settlement Date']){if(controllers.containsKey(f))controllers[f]!.text=DateTime.now().toIso8601String().substring(0,10);}
   if(controllers.containsKey('Platform'))controllers['Platform']!.text='Meesho';
-  for(final f in ['Firm / Account','Firm / GST Entity']){if(controllers.containsKey(f))controllers[f]!.text='JPWels';}
+  for(final f in ['Firm / Account','Firm / GST Entity']){if(controllers.containsKey(f))controllers[f]!.text='Demo Fashion Store';}
   final ok=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(
    title:Text('Add $module'),content:SizedBox(width:520,child:SingleChildScrollView(child:Column(children:controllers.entries.map((e)=>Padding(padding:const EdgeInsets.only(bottom:10),child:TextField(controller:e.value,decoration:InputDecoration(labelText:e.key),keyboardType:_numeric(e.key)?TextInputType.number:TextInputType.text))).toList()))),
    actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Save Record'))],
