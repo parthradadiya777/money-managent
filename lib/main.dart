@@ -414,13 +414,13 @@ class _BusinessHomeState extends State<BusinessHome> {
   final byBrand=<String,num>{};
   final labels=<String>{};
   for(final row in data) {
-   final platform='\u0024{row['Platform']??'Unknown'}'.trim();
-   final firm='\u0024{row['Firm / Account']??'Unassigned'}'.trim();
-   final sku='\u0024{row['SKU / Product']??''}'.trim();
-   final brand='\u0024{row['Brand']??(sku.isEmpty?'Unassigned':sku.split('-').first)}'.trim();
-   final labelId='\u0024{row['Label ID']??''}'.trim();
+   final platform=(row['Platform']??'Unknown').toString().trim();
+   final firm=(row['Firm / Account']??'Unassigned').toString().trim();
+   final sku=(row['SKU / Product']??'').toString().trim();
+   final brand=(row['Brand']??(sku.isEmpty?'Unassigned':sku.split('-').first)).toString().trim();
+   final labelId=(row['Label ID']??'').toString().trim();
    if(labelId.isNotEmpty) labels.add(labelId);
-   final qty=num.tryParse('\u0024{row['Orders Qty']??1}')??1;
+   final qty=num.tryParse((row['Orders Qty']??1).toString())??1;
    byPlatform[platform]=(byPlatform[platform]??0)+qty;
    byFirm[firm]=(byFirm[firm]??0)+qty;
    byBrand[brand]=(byBrand[brand]??0)+qty;
@@ -444,7 +444,8 @@ class _BusinessHomeState extends State<BusinessHome> {
    const Text('Quantity is summed from Orders Qty. Multi-SKU labels must be split into separate order lines by the PDF importer.',style:TextStyle(color:Colors.black54,fontSize:12)),
   ]);
  }
-\n Widget _masterHint()=>Container(padding:const EdgeInsets.all(12),margin:const EdgeInsets.only(bottom:12),decoration:BoxDecoration(color:const Color(0xFFEAF2FF),borderRadius:BorderRadius.circular(12)),child:const Text('Add firms, GSTINs and vendor details here. Starter examples: Demo Fashion Store, Demo Home Store, Demo Myntra Store and all five marketplaces.',style:TextStyle(color:Color(0xFF24477E))));
+
+ Widget _masterHint()=>Container(padding:const EdgeInsets.all(12),margin:const EdgeInsets.only(bottom:12),decoration:BoxDecoration(color:const Color(0xFFEAF2FF),borderRadius:BorderRadius.circular(12)),child:const Text('Add firms, GSTINs and vendor details here. Starter examples: Demo Fashion Store, Demo Home Store, Demo Myntra Store and all five marketplaces.',style:TextStyle(color:Color(0xFF24477E))));
 
  Future<void> _importShippingPdf() async {
   String platform = 'Myntra';
