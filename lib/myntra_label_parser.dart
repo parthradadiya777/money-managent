@@ -22,6 +22,25 @@ class MyntraLabelParser {
     return '${parts[2]}-$month-${parts[0].padLeft(2, '0')}';
   }
 
+  static String _invoiceBlockForSku(String sku, String invoiceText) {
+    final compact = invoiceText.replaceAll(RegExp(r'\\s+'), '');
+    final current = compact.indexOf('(${sku})');
+    if (current < 0) return '';
+    final nextSku = RegExp(r'\\([A-Z0-9][A-Z0-9_&-]{4,}\\)-', caseSensitive: false);
+    final next = nextSku.allMatches(compact).where((m) => m.start > current).firstOrNull;
+    return compact.substring(current, next?.start ?? compact.length);
+  }
+
+  static int _quantityForSku(String sku, String invoiceText) {
+    final block = _invoiceBlockForSku(sku, invoiceText);
+    if (block.isEmpty) return 1;
+    final match = RegExp(r'HSN:.*?(\\d+)Rs', caseSensitive: false, dotAll: true)
+        .firstMatch(block);
+    final fallback = RegExp(r'(\\d+)Rs[0-9]', caseSensitive: false).firstMatch(block);
+    final qty = int.tryParse(match?.group(1) ?? fallback?.group(1) ?? '');
+    return qty == null || qty < 1 ? 1 : qty;
+  }
+
   static String _brandFor(String sku, String invoiceText) {
     final compactInvoice = invoiceText.replaceAll(RegExp(r'\\s+'), '');
     final skuInInvoice = RegExp(
@@ -129,7 +148,7 @@ class MyntraLabelParser {
           final sku = (match.group(1) ?? '')
               .replaceAll(RegExp(r'\s+'), '')
               .toUpperCase();
-          final brand = _brandFor(sku, invoiceText);
+          final brand = _brandFor(sku, invoiceText);\n          final invoiceQty = _quantityForSku(sku, invoiceText);
           final shipmentRef = (match.group(2) ?? '').trim();
           final size = RegExp(r'-(XS|S|M|L|XL|XXL|3XL|4XL)$', caseSensitive: false)
               .firstMatch(sku)?.group(1)?.toUpperCase() ?? '';
