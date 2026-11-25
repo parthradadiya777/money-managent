@@ -7,7 +7,16 @@ import 'package:excel/excel.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
-  await Hive.openBox('business_manager');
+  final dataBox = await Hive.openBox('business_manager');
+  if (dataBox.get('Masters') == null) {
+    await dataBox.put('Masters', [
+      {'Record Type':'Firm','Name':'JPWels','GSTIN':'','State':'Gujarat','Platform':'Meesho','Notes':'Initial account mapping'},
+      {'Record Type':'Firm','Name':'House of Ishika','GSTIN':'','State':'Gujarat','Platform':'Meesho','Notes':'Initial account mapping'},
+      {'Record Type':'Firm','Name':'Jipro Store','GSTIN':'','State':'Gujarat','Platform':'Myntra','Notes':'Initial account mapping'},
+      {'Record Type':'Platform','Name':'Meesho'}, {'Record Type':'Platform','Name':'Myntra'},
+      {'Record Type':'Platform','Name':'Flipkart'}, {'Record Type':'Platform','Name':'Amazon'}, {'Record Type':'Platform','Name':'AJIO'},
+    ]);
+  }
   runApp(const BusinessManagerApp());
 }
 
@@ -210,8 +219,8 @@ class _BusinessHomeState extends State<BusinessHome> {
  Future<void> _exportExcel(String module)async{
   try{
    final data=rows(module),cols=fields[module]??[];final book=Excel.createExcel();final sheet=book['Export'];
-   sheet.appendRow(cols.map((e)=>TextCellValue(e)).toList());
-   for(final row in data){sheet.appendRow(cols.map((e)=>TextCellValue('${row[e]??''}')).toList());}
+   sheet.appendRow(cols);
+   for(final row in data){sheet.appendRow(cols.map((e)=>row[e]??'').toList());}
    final bytes=book.encode();if(bytes==null)return;
    final path=await FilePicker.platform.saveFile(fileName:'${module.replaceAll(' ','_')}.xlsx',bytes:bytes);
    if(path!=null&&!path.startsWith('content://'))await File(path).writeAsBytes(bytes,flush:true);
