@@ -175,7 +175,7 @@ class BusinessHome extends StatefulWidget {
  @override State<BusinessHome> createState()=>_BusinessHomeState();
 }
 class _BusinessHomeState extends State<BusinessHome> {
- final Box box=Hive.box('business_manager');
+ final Box box=Hive.box(hiveBoxName);
  int selected=0;
  String? _syncMessage;
  String money(num n)=>'₹${n.toStringAsFixed(2)}';
