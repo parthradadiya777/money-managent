@@ -75,10 +75,10 @@ class MyntraLabelParser {
       final pageTexts = <String>[];
       for (var pageIndex = 0; pageIndex < pageCount; pageIndex++) {
         try {
-          // Syncfusion's endPageIndex is exclusive; use pageIndex + 1.
+          // Syncfusion's endPageIndex is inclusive; keep it within the page count.
           pageTexts.add(extractor.extractText(
             startPageIndex: pageIndex,
-            endPageIndex: pageIndex + 1,
+            endPageIndex: pageIndex,
           ));
         } on RangeError {
           pageTexts.add('');
