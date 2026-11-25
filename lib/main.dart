@@ -38,7 +38,7 @@ class BusinessManagerApp extends StatelessWidget {
   Widget build(BuildContext context) => MaterialApp(
     debugShowCheckedModeBanner: false,
     title: 'Digitechified Business Manager',
-    theme: ThemeData(useMaterial3: true, colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2457C5)), scaffoldBackgroundColor: const Color(0xFFF5F7FB), visualDensity: VisualDensity.standard, cardTheme: const CardThemeData(margin: EdgeInsets.zero), inputDecorationTheme: const InputDecorationTheme(border: OutlineInputBorder(), filled: true, fillColor: Colors.white, contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 13))),
+    theme: ThemeData(useMaterial3: true, colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFD6A52A), primary: const Color(0xFFD6A52A), secondary: const Color(0xFF111111)), scaffoldBackgroundColor: const Color(0xFFF7F6F2), visualDensity: VisualDensity.standard, cardTheme: const CardThemeData(margin: EdgeInsets.zero), inputDecorationTheme: const InputDecorationTheme(border: OutlineInputBorder(), filled: true, fillColor: Colors.white, contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 13))),
     home: const AuthGate(),
   );
 }
@@ -302,7 +302,7 @@ class _BusinessHomeState extends State<BusinessHome> {
      MaterialPageRoute(builder: (_) => const BusinessManagerApp()), (route) => false);
    }, icon:const Icon(Icons.logout)),
   const SizedBox(width:8),
-  const CircleAvatar(backgroundColor:Color(0xFFE9EFFB),child:Text('P',style:TextStyle(color:Color(0xFF2457C5),fontWeight:FontWeight.bold))),
+  const CircleAvatar(backgroundColor:Color(0xFFE9EFFB),child:Text('P',style:TextStyle(color:Color(0xFFD6A52A),fontWeight:FontWeight.bold))),
  ]));
  Widget _bottomNav()=>NavigationBar(
   selectedIndex:selected==0?0:selected==1?1:selected==3?2:selected==6?3:4,
@@ -344,7 +344,7 @@ class _BusinessHomeState extends State<BusinessHome> {
    LayoutBuilder(builder:(context,c){
     final count=c.maxWidth>950?4:(c.maxWidth>560?2:1);
     final cards=[
-     _metric('Total Orders',orderQty,Icons.shopping_bag_outlined,const Color(0xFF2457C5),false),
+     _metric('Total Orders',orderQty,Icons.shopping_bag_outlined,const Color(0xFFD6A52A),false),
      _metric('Delivered Sales',sales,Icons.trending_up,const Color(0xFF16865B),true),
      _metric('Delivered Qty',delivered,Icons.local_shipping_outlined,const Color(0xFF8A5BD1),false),
      _metric('Bank Balance',bank,Icons.account_balance,const Color(0xFFDA8B25),true),
@@ -386,7 +386,7 @@ class _BusinessHomeState extends State<BusinessHome> {
      padding: const EdgeInsets.all(20),
      decoration: BoxDecoration(
       gradient: const LinearGradient(
-       colors: [Color(0xFF101D3A), Color(0xFF263F78)],
+       colors: [Color(0xFF090909), Color(0xFF252525)],
        begin: Alignment.topLeft, end: Alignment.bottomRight,
       ),
       borderRadius: BorderRadius.circular(18),
@@ -399,9 +399,9 @@ class _BusinessHomeState extends State<BusinessHome> {
         child: const Text('PDF-FIRST WORKFLOW', style: TextStyle(color: Color(0xFFFFC44F), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
        ),
        const SizedBox(height: 10),
-       const Text('Shipping Label Manager', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+       const Text('Daily Marketplace Orders', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
        const SizedBox(height: 5),
-       const Text('Upload a marketplace PDF. Orders, SKU quantities, brands and seller details are extracted and sorted automatically.', style: TextStyle(color: Color(0xFFD8E1F3), height: 1.4)),
+       const Text('Upload Myntra or Meesho shipping labels. Orders are saved and shown instantly with date, platform and brand-wise totals.', style: TextStyle(color: Color(0xFFE8E3D5), height: 1.4)),
       ])),
       const SizedBox(width: 12),
       Container(width: 54, height: 54, decoration: BoxDecoration(color: const Color(0xFFFFC44F).withOpacity(.15), borderRadius: BorderRadius.circular(16)), child: const Icon(Icons.picture_as_pdf_rounded, color: Color(0xFFFFC44F), size: 29)),
@@ -416,7 +416,7 @@ class _BusinessHomeState extends State<BusinessHome> {
      OutlinedButton.icon(onPressed:()=>_importExcel(module),icon:const Icon(Icons.file_upload_outlined),label:const Text('Import Excel')),
      OutlinedButton.icon(onPressed:()=>_exportExcel(module),icon:const Icon(Icons.file_download_outlined),label:const Text('Export Excel')),
     ],
-    if(module=='Daily Orders') FilledButton.tonalIcon(onPressed:()=>_importShippingPdf(),icon:const Icon(Icons.picture_as_pdf_outlined),label:const Text('Upload Shipping Label PDF')),
+    if(module=='Daily Orders') FilledButton.icon(onPressed:()=>_importShippingPdf(),icon:const Icon(Icons.picture_as_pdf_outlined),label:const Text('Upload Shipping Label PDF')),
    ]),
    const SizedBox(height:16),if(module=='Daily Orders')_dailyOrderSummary(data),if(module=='Masters')_masterHint(),
    if(data.isEmpty)Container(padding:const EdgeInsets.all(32),decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(16)),child:const Column(children:[
@@ -438,44 +438,65 @@ class _BusinessHomeState extends State<BusinessHome> {
 
  Widget _dailyOrderSummary(List<Map> data) {
   final byPlatform=<String,num>{};
-  final byFirm=<String,num>{};
   final byBrand=<String,num>{};
+  final byDay=<String,Map<String,num>>{};
   final labels=<String>{};
   for(final row in data) {
    final platform=(row['Platform']??'Unknown').toString().trim();
-   final firm=(row['Firm / Account']??'Unassigned').toString().trim();
-   final sku=(row['SKU / Product']??'').toString().trim();
-   final brand=(row['Brand']??(sku.isEmpty?'Unassigned':sku.split('-').first)).toString().trim();
+   final brand=(row['Brand']??'Unassigned').toString().trim();
+   final date=(row['Date']??'Not detected').toString().trim();
    final labelId=(row['Label ID']??'').toString().trim();
    if(labelId.isNotEmpty) labels.add(labelId);
    final qty=num.tryParse((row['Orders Qty']??1).toString())??1;
    byPlatform[platform]=(byPlatform[platform]??0)+qty;
-   byFirm[firm]=(byFirm[firm]??0)+qty;
    byBrand[brand]=(byBrand[brand]??0)+qty;
+   final day=byDay.putIfAbsent(date,()=>{});
+   day[platform]=(day[platform]??0)+qty;
   }
   Widget group(String title,Map<String,num> values) => Card(
-   color:Colors.white,elevation:0,child:Padding(padding:const EdgeInsets.all(14),
-    child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-     Text(title,style:const TextStyle(fontWeight:FontWeight.bold,fontSize:14)),
-     const SizedBox(height:8),
-     if(values.isEmpty) const Text('No data yet',style:TextStyle(color:Colors.black54)),
-     ...values.entries.map((e)=>Padding(padding:const EdgeInsets.symmetric(vertical:4),
-      child:Row(children:[Expanded(child:Text(e.key)),Text(e.value.toStringAsFixed(0),style:const TextStyle(fontWeight:FontWeight.bold))]))),
-    ])));
+   color:Colors.white,elevation:0,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(16),side:const BorderSide(color:Color(0xFFE8E3D8))),
+   child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+    Text(title,style:const TextStyle(fontWeight:FontWeight.bold,fontSize:14,color:Color(0xFF171717))),
+    const SizedBox(height:10),
+    if(values.isEmpty) const Text('No data yet',style:TextStyle(color:Colors.black54)),
+    ...values.entries.map((e)=>Padding(padding:const EdgeInsets.symmetric(vertical:5),child:Row(children:[
+      Expanded(child:Text(e.key,style:const TextStyle(color:Color(0xFF4B4B4B)))),
+      Text(e.value.toStringAsFixed(0),style:const TextStyle(fontWeight:FontWeight.bold,color:Color(0xFF111111)))
+    ]))),
+   ])));
+  final sortedDays=byDay.keys.toList()..sort((a,b)=>b.compareTo(a));
   return Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-   Wrap(spacing:10,runSpacing:10,children:[_metric('Shipping Labels',labels.length,Icons.local_shipping, const Color(0xFF2457C5),false),_metric('SKU Lines',data.length,Icons.inventory_2, const Color(0xFF7C4DFF),false)]),
-   const SizedBox(height:8),
-   LayoutBuilder(builder: (context, constraints) {
-    final platformCard = group('Platform-wise order quantity', byPlatform);
-    final brandCard = group('Brand-wise order quantity', byBrand);
-    if (constraints.maxWidth < 680) {
-     return Column(children: [platformCard, const SizedBox(height: 8), brandCard]);
-    }
-    return Row(children: [Expanded(child: platformCard), const SizedBox(width: 10), Expanded(child: brandCard)]);
+   LayoutBuilder(builder:(context,constraints){
+    final metrics=Wrap(spacing:10,runSpacing:10,children:[
+     _metric('Shipping Labels',labels.length,Icons.local_shipping, const Color(0xFFD6A52A),false),
+     _metric('SKU Lines',data.length,Icons.inventory_2, const Color(0xFF333333),false),
+    ]);
+    return metrics;
    }),
+   const SizedBox(height:10),
+   LayoutBuilder(builder:(context,constraints){
+    final platformCard=group('Platform-wise order quantity',byPlatform);
+    final brandCard=group('Brand-wise order quantity',byBrand);
+    if(constraints.maxWidth<680)return Column(children:[platformCard,const SizedBox(height:10),brandCard]);
+    return Row(crossAxisAlignment:CrossAxisAlignment.start,children:[Expanded(child:platformCard),const SizedBox(width:10),Expanded(child:brandCard)]);
+   }),
+   const SizedBox(height:14),
+   Container(padding:const EdgeInsets.all(16),decoration:BoxDecoration(color:const Color(0xFF111111),borderRadius:BorderRadius.circular(16)),
+    child:Row(children:[const Icon(Icons.calendar_month_rounded,color:Color(0xFFFFC84D)),const SizedBox(width:10),const Expanded(child:Text('Day-wise order summary',style:TextStyle(color:Colors.white,fontWeight:FontWeight.bold,fontSize:16))),Text('${sortedDays.length} days',style:const TextStyle(color:Color(0xFFFFC84D),fontWeight:FontWeight.bold))])),
    const SizedBox(height:8),
-   const SizedBox(height:8),
-   const Text('Orders are counted from shipping-label pages only. Tax Invoice pages are read only to enrich order details and are never counted as extra orders. Multi-SKU labels are split into individual SKU lines; quantity is taken from the invoice when available.',style:TextStyle(color:Colors.black54,fontSize:12)),
+   if(sortedDays.isEmpty) const Text('No daily orders yet',style:TextStyle(color:Colors.black54)),
+   ...sortedDays.map((day){
+    final totals=byDay[day]!;
+    final total=totals.values.fold<num>(0,(a,b)=>a+b);
+    return Card(color:Colors.white,elevation:0,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(14),side:const BorderSide(color:Color(0xFFE8E3D8))),
+     child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      Row(children:[Expanded(child:Text(day,style:const TextStyle(fontWeight:FontWeight.bold,fontSize:15))),Text('${total.toStringAsFixed(0)} orders',style:const TextStyle(fontWeight:FontWeight.bold,color:Color(0xFF9B7417)))]),
+      const Divider(height:16),
+      Wrap(spacing:8,runSpacing:8,children:totals.entries.map((e)=>Container(padding:const EdgeInsets.symmetric(horizontal:11,vertical:7),decoration:BoxDecoration(color:const Color(0xFFF7F3E8),borderRadius:BorderRadius.circular(9)),child:Text('${e.key}: ${e.value.toStringAsFixed(0)}',style:const TextStyle(fontWeight:FontWeight.w600,fontSize:12)))).toList())
+     ])));
+   }),
+   const SizedBox(height:10),
+   const Text('Only shipping labels are counted. Myntra tax invoices are used only to enrich order details. Multiple SKUs on one label are recorded as separate SKU lines.',style:TextStyle(color:Colors.black54,fontSize:12)),
   ]);
  }
 
