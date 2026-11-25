@@ -33,15 +33,15 @@ jobs:
           channel: stable
       - run: rm -rf android
       - run: flutter create --platforms=android --org com.digitechified --project-name business_manager .
-      - name: Set Android API level 36 for every Android module
+      - name: Set Android API level 36 for app and plugin modules
         shell: bash
         run: |
           sed -i 's/compileSdk = .*/compileSdk = 36/' android/app/build.gradle.kts
           cat >> android/build.gradle.kts <<'EOF'
 
-          // Keep all Flutter plugin Android modules aligned with the app compile SDK.
+          // Set compile SDK as each Android library plugin is applied.
           subprojects {
-              afterEvaluate {
+              plugins.withId("com.android.library") {
                   val androidExtension = extensions.findByName("android")
                   if (androidExtension != null) {
                       val setter = androidExtension.javaClass.methods.firstOrNull {
