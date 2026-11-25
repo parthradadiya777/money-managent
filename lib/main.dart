@@ -373,7 +373,10 @@ class _BusinessHomeState extends State<BusinessHome> {
     columns:[...cols.take(6).map((c)=>DataColumn(label:Text(c,style:const TextStyle(fontWeight:FontWeight.bold)))),const DataColumn(label:Text('Action'))],
     rows:data.asMap().entries.map((entry){final idx=entry.key,row=entry.value;return DataRow(cells:[
      ...cols.take(6).map((c)=>DataCell(Text('${row[c]??''}',maxLines:1,overflow:TextOverflow.ellipsis))),
-     DataCell(IconButton(icon:const Icon(Icons.delete_outline,color:Colors.red),onPressed:()=>_deleteRecord(module,idx))),
+     DataCell(Row(mainAxisSize:MainAxisSize.min,children:[
+      IconButton(tooltip:'Edit record',icon:const Icon(Icons.edit_outlined,color:Color(0xFF2457C5)),onPressed:()=>_editRecord(module,idx)),
+      IconButton(tooltip:'Delete record',icon:const Icon(Icons.delete_outline,color:Colors.red),onPressed:()=>_deleteRecord(module,idx)),
+     ])),
     ]);}).toList(),
    ))),
    const SizedBox(height:12),if(data.isNotEmpty)Align(alignment:Alignment.centerRight,child:TextButton.icon(onPressed:()=>_exportExcel(module),icon:const Icon(Icons.download),label:const Text('Export Excel'))),
@@ -402,6 +405,40 @@ class _BusinessHomeState extends State<BusinessHome> {
   for(final c in controllers.values){c.dispose();}
  }
  bool _numeric(String key)=>['Qty','Value','Sales','Fees','Shipping','Deductions','Amount','GST %','Credit','Debit','Balance','Paid','Received'].any((v)=>key.toLowerCase().contains(v.toLowerCase()));
+ Future<void> _editRecord(String module,int index) async {
+  final list=rows(module);
+  if(index<0||index>=list.length)return;
+  final original=list[index];
+  final controllers=<String,TextEditingController>{
+   for(final field in fields[module]??[])
+    field:TextEditingController(text:'${original[field]??''}')
+  };
+  final ok=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(
+   title:Text('Edit $module'),
+   content:SizedBox(width:520,child:SingleChildScrollView(child:Column(
+    children:controllers.entries.map((e)=>Padding(
+     padding:const EdgeInsets.only(bottom:10),
+     child:TextField(controller:e.value,decoration:InputDecoration(labelText:e.key),
+      keyboardType:_numeric(e.key)?TextInputType.number:TextInputType.text),
+    )).toList(),
+   ))),
+   actions:[
+    TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),
+    FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Save Changes')),
+   ],
+  ));
+  if(ok==true){
+   final updated=<String,dynamic>{
+    for(final e in controllers.entries)e.key:e.value.text.trim(),
+    if(original['_syncId']!=null)'_syncId':original['_syncId'],
+   };
+   list[index]=updated;
+   await saveRows(module,list);
+   if(mounted)setState((){});
+  }
+  for(final c in controllers.values){c.dispose();}
+ }
+
  Future<void> _deleteRecord(String module,int index) async {
   final list=rows(module);
   final removed=list.removeAt(index);
