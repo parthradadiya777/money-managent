@@ -58,6 +58,25 @@ class CloudSyncService {
     }
   }
 
+
+  Future<Map<String, dynamic>> parseShippingPdf({
+    required List<int> bytes, required String filename,
+    required String platform, required String firm,
+  }) async {
+    final request = http.MultipartRequest('POST', _uri('/api/orders/parse-label-pdf'));
+    request.headers['Authorization'] = 'Bearer $token';
+    request.fields['platform'] = platform;
+    request.fields['firm'] = firm;
+    request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
+    final streamed = await request.send().timeout(const Duration(minutes: 2));
+    final response = await http.Response.fromStream(streamed);
+    final data = _decode(response);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(data['detail'] ?? 'PDF parsing failed');
+    }
+    return data;
+  }
+
   Future<void> deleteRecord(String recordId) async {
     final response = await http.delete(
       _uri('/api/records/${Uri.encodeComponent(recordId)}'),
