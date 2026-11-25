@@ -3,6 +3,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart';
 import 'dart:math';
+import 'dart:typed_data';
 import 'cloud_sync.dart';
 
 const bool isTestEnvironment = String.fromEnvironment('APP_ENV') == 'test';
@@ -453,7 +454,7 @@ class _BusinessHomeState extends State<BusinessHome> {
    sheet.appendRow(cols.map((e)=>TextCellValue(e)).toList());
    for(final row in data){sheet.appendRow(cols.map((e)=>TextCellValue('${row[e]??''}')).toList());}
    final bytes=book.encode();if(bytes==null)return;
-   await FilePicker.platform.saveFile(fileName:'${module.replaceAll(' ','_')}.xlsx',bytes:bytes);
+   await FilePicker.platform.saveFile(fileName:'${module.replaceAll(' ','_')}.xlsx',bytes:Uint8List.fromList(bytes));
    if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Excel export ready')));
   }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Export failed: $e')));}
  }
