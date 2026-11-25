@@ -273,20 +273,20 @@ class _BusinessHomeState extends State<BusinessHome> {
    Expanded(child:Column(children:[_topBar(),Expanded(child:selected==0?_dashboard():_modulePage(modules[selected])),if(!wide)_bottomNav()])),
   ]));
  }
- Widget _sideNav()=>Container(width:235,color:const Color(0xFF101D3A),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+ Widget _sideNav()=>Container(width:235,color:const Color(0xFF080808),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
   const Padding(padding:EdgeInsets.fromLTRB(20,28,16,24),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
    BrandMark(size:46),SizedBox(height:12),
    Text('DIGITECHIFIED',style:TextStyle(color:Colors.white,fontWeight:FontWeight.bold,letterSpacing:1.2)),
-   Text('Business Manager',style:TextStyle(color:Color(0xFFB9C7E5),fontSize:12)),
+   Text('Business Manager',style:TextStyle(color:Color(0xFFB9B9B9),fontSize:12)),
   ])),
-  const Divider(color:Color(0xFF33415F)),
+  const Divider(color:Color(0xFF333333)),
   Expanded(child:ListView.builder(itemCount:modules.length,itemBuilder:(c,i){
    final icons=[Icons.dashboard_rounded,Icons.shopping_bag,Icons.assignment_return,Icons.inventory_2,Icons.payments,Icons.account_balance,Icons.account_balance_wallet,Icons.receipt_long,Icons.settings];
    final active=selected==i;
-   return ListTile(dense:true,selected:active,selectedTileColor:const Color(0xFF263B67),leading:Icon(icons[i],color:active?Colors.white:const Color(0xFFB9C7E5),size:19),
+   return ListTile(dense:true,selected:active,selectedTileColor:const Color(0xFF292313),leading:Icon(icons[i],color:active?const Color(0xFFFFC84D):const Color(0xFFB9B9B9),size:19),
     title:Text(modules[i],style:TextStyle(color:active?Colors.white:const Color(0xFFB9C7E5),fontSize:13,fontWeight:active?FontWeight.w600:FontWeight.normal)),onTap:()=>setState(()=>selected=i));
   })),
-  const Padding(padding:EdgeInsets.all(16),child:Text('Multi Marketplace • Multi GST',style:TextStyle(color:Color(0xFF9EACCA),fontSize:11))),
+  const Padding(padding:EdgeInsets.all(16),child:Text('Multi Marketplace • Multi GST',style:TextStyle(color:Color(0xFF999999),fontSize:11))),
  ]));
  Widget _topBar()=>Container(height:70,padding:const EdgeInsets.symmetric(horizontal:22),color:Colors.white,child:Row(children:[
   if(MediaQuery.of(context).size.width<=850)const Icon(Icons.menu_rounded,color:Color(0xFF263B67)),
