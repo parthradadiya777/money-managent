@@ -168,7 +168,7 @@ class MyntraLabelParser {
             'Firm / Account': firm,
             'Order ID': orderId,
             'SKU / Product': sku,
-            'Brand': brand,
+            'Brand': firm,
             'Size': size,
             'Color': '',
             'Orders Qty': invoiceQty.toString(),
