@@ -44,7 +44,7 @@ class BusinessManagerApp extends StatelessWidget {
 const platforms = ['Meesho', 'Myntra', 'Flipkart', 'Amazon', 'AJIO'];
 const modules = ['Dashboard','Daily Orders','Returns & RTO','Purchases','Vendor Payments','Settlements','Bank Transactions','Expenses','Masters'];
 const Map<String,List<String>> fields = {
- 'Daily Orders':['Date','Platform','Firm / Account','Order ID','SKU / Product','Orders Qty','Gross Order Value','Delivered Qty','Delivered Sales','Commission / Fees','Shipping Fees','Other Deductions'],
+ 'Daily Orders':['Date','Platform','Firm / Account','Order ID','SKU / Product','Size','Color','Orders Qty','Gross Order Value','Delivered Qty','Delivered Sales','Commission / Fees','Shipping Fees','Other Deductions','Courier','AWB / Tracking No.','Customer','Pincode','Source PDF','PDF Page'],
  'Returns & RTO':['Date','Platform','Firm / Account','Order ID','SKU / Product','Type','Qty','Refund / Loss Amount','Return Shipping','Reason','Status'],
  'Purchases':['Purchase Date','Firm / GST Entity','Vendor Name','Invoice No.','SKU / Product','Qty','Taxable Value','GST %','GST Amount','Invoice Total','Paid Amount','Balance Due'],
  'Vendor Payments':['Payment Date','Firm / GST Entity','Vendor Name','Purchase Invoice No.','Payment Mode','Reference / UTR','Amount Paid','Notes'],
@@ -387,8 +387,9 @@ class _BusinessHomeState extends State<BusinessHome> {
     FilledButton.icon(onPressed:()=>_addRecord(module),icon:const Icon(Icons.add),label:const Text('Add Manually')),
     OutlinedButton.icon(onPressed:()=>_importExcel(module),icon:const Icon(Icons.file_upload_outlined),label:const Text('Import Excel')),
     OutlinedButton.icon(onPressed:()=>_exportExcel(module),icon:const Icon(Icons.file_download_outlined),label:const Text('Export Excel')),
+     if(module=='Daily Orders')FilledButton.tonalIcon(onPressed:_importShippingPdf,icon:const Icon(Icons.picture_as_pdf_outlined),label:const Text('Import Shipping PDF')),
    ]),
-   const SizedBox(height:16),if(module=='Masters')_masterHint(),
+   const SizedBox(height:16),if(module=='Daily Orders')_dailyOrderSummary(data),if(module=='Masters')_masterHint(),
    if(data.isEmpty)Container(padding:const EdgeInsets.all(32),decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(16)),child:const Column(children:[
     Icon(Icons.inbox_outlined,size:42,color:Colors.black38),SizedBox(height:10),Text('No records yet',style:TextStyle(fontWeight:FontWeight.bold,fontSize:16)),
     SizedBox(height:5),Text('Add a record manually or import an Excel workbook.',style:TextStyle(color:Colors.black54)),
@@ -424,7 +425,7 @@ class _BusinessHomeState extends State<BusinessHome> {
    title:Text('Add $module'),content:SizedBox(width:520,child:SingleChildScrollView(child:Column(children:controllers.entries.map((e)=>Padding(padding:const EdgeInsets.only(bottom:12),child:_formField(module,e.key,e.value))).toList()))),
    actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Save Record'))],
   ));
-  if(ok==true){final record=<String,dynamic>{for(final e in controllers.entries)e.key:e.value.text.trim()};final list=rows(module)..add(record);await saveRows(module,list);if(mounted)setState((){});}
+  if(ok==true){final record=<String,dynamic>{for(final e in controllers.entries)e.key:e.value.text.trim()};if(record.values.every((v)=>'$v'.trim().isEmpty)){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Please enter at least one field.')));}else{final list=rows(module)..add(record);await saveRows(module,list);if(mounted){setState((){});ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Record added successfully.')));}}}
   for(final c in controllers.values){c.dispose();}
  }
  List<String> _optionsFor(String module, String field) {
