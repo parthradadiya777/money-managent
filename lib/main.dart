@@ -387,7 +387,7 @@ class _BusinessHomeState extends State<BusinessHome> {
     FilledButton.icon(onPressed:()=>_addRecord(module),icon:const Icon(Icons.add),label:const Text('Add Manually')),
     OutlinedButton.icon(onPressed:()=>_importExcel(module),icon:const Icon(Icons.file_upload_outlined),label:const Text('Import Excel')),
     OutlinedButton.icon(onPressed:()=>_exportExcel(module),icon:const Icon(Icons.file_download_outlined),label:const Text('Export Excel')),
-     if(module=='Daily Orders')FilledButton.tonalIcon(onPressed:_importShippingPdf,icon:const Icon(Icons.picture_as_pdf_outlined),label:const Text('Import Shipping PDF')),
+     if(module=='Daily Orders') const Tooltip(message:'Platform-specific PDF extraction is being completed and tested.',child:FilledButton.tonalIcon(onPressed:null,icon:Icon(Icons.picture_as_pdf_outlined),label:Text('PDF Import — coming next'))),
    ]),
    const SizedBox(height:16),if(module=='Daily Orders')_dailyOrderSummary(data),if(module=='Masters')_masterHint(),
    if(data.isEmpty)Container(padding:const EdgeInsets.all(32),decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(16)),child:const Column(children:[
@@ -406,7 +406,33 @@ class _BusinessHomeState extends State<BusinessHome> {
 
   ]);
  }
- Widget _masterHint()=>Container(padding:const EdgeInsets.all(12),margin:const EdgeInsets.only(bottom:12),decoration:BoxDecoration(color:const Color(0xFFEAF2FF),borderRadius:BorderRadius.circular(12)),child:const Text('Add firms, GSTINs and vendor details here. Starter examples: Demo Fashion Store, Demo Home Store, Demo Myntra Store and all five marketplaces.',style:TextStyle(color:Color(0xFF24477E))));
+
+ Widget _dailyOrderSummary(List<Map> data) {
+  final byPlatform=<String,num>{};
+  final byFirm=<String,num>{};
+  for(final row in data) {
+   final platform='\u0024{row['Platform']??'Unknown'}'.trim();
+   final firm='\u0024{row['Firm / Account']??'Unassigned'}'.trim();
+   final qty=num.tryParse('\u0024{row['Orders Qty']??1}')??1;
+   byPlatform[platform]=(byPlatform[platform]??0)+qty;
+   byFirm[firm]=(byFirm[firm]??0)+qty;
+  }
+  Widget group(String title,Map<String,num> values) => Card(
+   color:Colors.white,elevation:0,child:Padding(padding:const EdgeInsets.all(14),
+    child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+     Text(title,style:const TextStyle(fontWeight:FontWeight.bold,fontSize:14)),
+     const SizedBox(height:8),
+     if(values.isEmpty) const Text('No data yet',style:TextStyle(color:Colors.black54)),
+     ...values.entries.map((e)=>Padding(padding:const EdgeInsets.symmetric(vertical:4),
+      child:Row(children:[Expanded(child:Text(e.key)),Text(e.value.toStringAsFixed(0),style:const TextStyle(fontWeight:FontWeight.bold))]))),
+    ])));
+  return Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+   Row(children:[Expanded(child:group('Platform-wise order quantity',byPlatform)),const SizedBox(width:10),Expanded(child:group('Brand / Firm-wise order quantity',byFirm))]),
+   const SizedBox(height:8),
+   const Text('Quantity is summed from Orders Qty. Multi-SKU labels must be split into separate order lines by the PDF importer.',style:TextStyle(color:Colors.black54,fontSize:12)),
+  ]);
+ }
+\n Widget _masterHint()=>Container(padding:const EdgeInsets.all(12),margin:const EdgeInsets.only(bottom:12),decoration:BoxDecoration(color:const Color(0xFFEAF2FF),borderRadius:BorderRadius.circular(12)),child:const Text('Add firms, GSTINs and vendor details here. Starter examples: Demo Fashion Store, Demo Home Store, Demo Myntra Store and all five marketplaces.',style:TextStyle(color:Color(0xFF24477E))));
 
  Future<void> _quickAdd()async{
   final choice=await showModalBottomSheet<String>(context:context,builder:(c)=>SafeArea(child:Column(mainAxisSize:MainAxisSize.min,children:[
