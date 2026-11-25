@@ -519,7 +519,7 @@ class _BusinessHomeState extends State<BusinessHome> {
         : MeeshoLabelParser.parse(bytes);
     if (imported.isEmpty) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No $selectedPlatform shipping labels found. Check that the correct marketplace PDF was selected.')));
+        SnackBar(content: Text('No $selectedPlatform shipping labels found. Check that the correct marketplace PDF was selected.')));
       return;
     }
     final existing = rows('Daily Orders');
