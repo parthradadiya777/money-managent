@@ -83,11 +83,31 @@ class _BusinessHomeState extends State<BusinessHome> {
   const Chip(avatar:Icon(Icons.circle,size:9,color:Colors.green),label:Text('Local data')),const SizedBox(width:8),
   const CircleAvatar(backgroundColor:Color(0xFFE9EFFB),child:Text('P',style:TextStyle(color:Color(0xFF2457C5),fontWeight:FontWeight.bold))),
  ]));
- Widget _bottomNav()=>NavigationBar(selectedIndex:selected>4?4:selected,onDestinationSelected:(i)=>setState(()=>selected=i),destinations:const[
-  NavigationDestination(icon:Icon(Icons.dashboard),label:'Home'),NavigationDestination(icon:Icon(Icons.shopping_bag),label:'Orders'),
-  NavigationDestination(icon:Icon(Icons.inventory),label:'Purchase'),NavigationDestination(icon:Icon(Icons.account_balance),label:'Bank'),
-  NavigationDestination(icon:Icon(Icons.more_horiz),label:'More'),
- ]);
+ Widget _bottomNav()=>NavigationBar(
+  selectedIndex:selected==0?0:selected==1?1:selected==3?2:selected==6?3:4,
+  onDestinationSelected:(i){
+   if(i==0){setState(()=>selected=0);}
+   else if(i==1){setState(()=>selected=1);}
+   else if(i==2){setState(()=>selected=3);}
+   else if(i==3){setState(()=>selected=6);}
+   else {_showMoreModules();}
+  },
+  destinations:const[
+   NavigationDestination(icon:Icon(Icons.dashboard),label:'Home'),
+   NavigationDestination(icon:Icon(Icons.shopping_bag),label:'Orders'),
+   NavigationDestination(icon:Icon(Icons.inventory),label:'Purchase'),
+   NavigationDestination(icon:Icon(Icons.account_balance),label:'Bank'),
+   NavigationDestination(icon:Icon(Icons.more_horiz),label:'More'),
+  ],
+ );
+ Future<void> _showMoreModules()async{
+  final options=modules.asMap().entries.where((e)=>e.key!=0&&e.key!=1&&e.key!=3&&e.key!=6).toList();
+  final choice=await showModalBottomSheet<int>(context:context,builder:(c)=>SafeArea(child:ListView(shrinkWrap:true,children:[
+   const ListTile(title:Text('More sections',style:TextStyle(fontWeight:FontWeight.bold))),
+   ...options.map((e)=>ListTile(leading:const Icon(Icons.folder_open),title:Text(e.value),onTap:()=>Navigator.pop(c,e.key))),
+  ])));
+  if(choice!=null&&mounted)setState(()=>selected=choice);
+ }
  Widget _dashboard(){
   final orderQty=sum('Daily Orders','Orders Qty'),sales=sum('Daily Orders','Delivered Sales'),delivered=sum('Daily Orders','Delivered Qty');
   final returnQty=rows('Returns & RTO').where((e)=>'${e['Type']}'.toLowerCase()=='return').fold<num>(0,(v,e)=>v+(num.tryParse('${e['Qty']??0}')??0));
