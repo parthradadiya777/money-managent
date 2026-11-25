@@ -12,7 +12,7 @@ class MyntraLabelParser {
           endPageIndex: i,
         );
         final skuMatches = RegExp(
-          r'\\[\\s*([A-Z0-9][A-Z0-9_-]*)\\s*\\*\\s*([^\\]]+)\\]',
+          r'\[\s*([A-Z0-9][A-Z0-9_-]*)\s*\*\s*([^\]]+)\]',
           caseSensitive: false,
         ).allMatches(text).toList();
         // Myntra PDFs contain a Tax Invoice page followed by its shipping
@@ -22,23 +22,23 @@ class MyntraLabelParser {
         if (!isLabel || skuMatches.isEmpty) continue;
 
         final customerBlock = RegExp(
-          r"Buyer's Name And Address\\s*([\\s\\S]*?)(?:If undelivered|Seller Details|Buyer Declaration)",
+          r"Buyer's Name And Address\s*([\s\S]*?)(?:If undelivered|Seller Details|Buyer Declaration)",
           caseSensitive: false,
         ).firstMatch(text)?.group(1)?.trim() ?? '';
         final customerLines = customerBlock
-            .split(RegExp(r'\\r?\\n'))
+            .split(RegExp(r'\r?\n'))
             .map((v) => v.trim())
             .where((v) => v.isNotEmpty)
             .toList();
         final customer = customerLines.isEmpty ? '' : customerLines.first;
-        final pin = RegExp(r'\\b[1-9][0-9]{5}\\b').firstMatch(customerBlock)?.group(0) ?? '';
+        final pin = RegExp(r'\b[1-9][0-9]{5}\b').firstMatch(customerBlock)?.group(0) ?? '';
         final amount = RegExp(
-          r'AMOUNT TO BE PAID\\s*Rs\\.?\\s*([0-9,]+(?:\\.[0-9]+)?)',
+          r'AMOUNT TO BE PAID\s*Rs\.?\s*([0-9,]+(?:\.[0-9]+)?)',
           caseSensitive: false,
         ).firstMatch(text)?.group(1)?.replaceAll(',', '') ?? '';
-        final mode = RegExp(r'\\b(COD|PREPAID)\\b', caseSensitive: false)
+        final mode = RegExp(r'\b(COD|PREPAID)\b', caseSensitive: false)
             .firstMatch(text)?.group(1)?.toUpperCase() ?? '';
-        final courier = text.split(RegExp(r'\\r?\\n')).map((v) => v.trim())
+        final courier = text.split(RegExp(r'\r?\n')).map((v) => v.trim())
             .firstWhere((v) => v.toLowerCase().contains('logistics'), orElse: () => '');
         final pageNumber = i + 1;
 
