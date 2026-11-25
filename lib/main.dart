@@ -382,13 +382,18 @@ class _BusinessHomeState extends State<BusinessHome> {
   return ListView(padding:const EdgeInsets.all(22),children:[
    Text('${data.length} records',style:const TextStyle(color:Colors.black54)),
    const SizedBox(height:4),
-   const Text('Manage your records, import a workbook or download an Excel template.',style:TextStyle(fontWeight:FontWeight.w600)),
+   Text(module == 'Daily Orders'
+     ? 'Upload marketplace shipping-label PDFs. The software reads order details and sorts them automatically.'
+     : 'Manage your records, import a workbook or download an Excel template.',
+     style: const TextStyle(fontWeight: FontWeight.w600)),
    const SizedBox(height:14),
    Wrap(spacing:10,runSpacing:10,children:[
     FilledButton.icon(onPressed:()=>_addRecord(module),icon:const Icon(Icons.add),label:const Text('Add Manually')),
-    OutlinedButton.icon(onPressed:()=>_importExcel(module),icon:const Icon(Icons.file_upload_outlined),label:const Text('Import Excel')),
-    OutlinedButton.icon(onPressed:()=>_exportExcel(module),icon:const Icon(Icons.file_download_outlined),label:const Text('Export Excel')),
-     if(module=='Daily Orders') FilledButton.tonalIcon(onPressed:()=>_importShippingPdf(),icon:const Icon(Icons.picture_as_pdf_outlined),label:const Text('Import Shipping Label PDF')),
+    if(module != 'Daily Orders') ...[
+     OutlinedButton.icon(onPressed:()=>_importExcel(module),icon:const Icon(Icons.file_upload_outlined),label:const Text('Import Excel')),
+     OutlinedButton.icon(onPressed:()=>_exportExcel(module),icon:const Icon(Icons.file_download_outlined),label:const Text('Export Excel')),
+    ],
+    if(module=='Daily Orders') FilledButton.tonalIcon(onPressed:()=>_importShippingPdf(),icon:const Icon(Icons.picture_as_pdf_outlined),label:const Text('Upload Shipping Label PDF')),
    ]),
    const SizedBox(height:16),if(module=='Daily Orders')_dailyOrderSummary(data),if(module=='Masters')_masterHint(),
    if(data.isEmpty)Container(padding:const EdgeInsets.all(32),decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(16)),child:const Column(children:[
@@ -439,9 +444,8 @@ class _BusinessHomeState extends State<BusinessHome> {
    const SizedBox(height:8),
    Row(children:[Expanded(child:group('Platform-wise order quantity',byPlatform)),const SizedBox(width:10),Expanded(child:group('Brand-wise order quantity',byBrand))]),
    const SizedBox(height:8),
-   group('Firm / Account-wise order quantity',byFirm),
    const SizedBox(height:8),
-   const Text('Quantity is summed from Orders Qty. Multi-SKU labels must be split into separate order lines by the PDF importer.',style:TextStyle(color:Colors.black54,fontSize:12)),
+   const Text('Orders are counted from shipping-label pages only. Tax Invoice pages are read only to enrich order details and are never counted as extra orders. Multi-SKU labels are split into individual SKU lines; quantity is taken from the invoice when available.',style:TextStyle(color:Colors.black54,fontSize:12)),
   ]);
  }
 
@@ -452,33 +456,38 @@ class _BusinessHomeState extends State<BusinessHome> {
   final selectedPlatform = await showDialog<String>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: const Text('Select marketplace PDF'),
+      title: const Text('Choose marketplace PDF'),
       content: DropdownButtonFormField<String>(
         value: platform,
+        isExpanded: true,
         decoration: const InputDecoration(labelText: 'Marketplace'),
         items: platforms.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
         onChanged: (v) { if (v != null) platform = v; },
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-        FilledButton(onPressed: () => Navigator.pop(ctx, platform), child: const Text('Continue')),
+        FilledButton(onPressed: () => Navigator.pop(ctx, platform), child: const Text('Choose PDF')),
       ],
     ),
   );
   if (selectedPlatform == null) return;
   if (selectedPlatform != 'Myntra') {
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$selectedPlatform PDF format parser will be added separately. Myntra is available now.')));
+      SnackBar(content: Text('$selectedPlatform PDF parser is not enabled yet. Myntra shipping labels are supported in this build.')));
     return;
   }
   try {
     final picked = await FilePicker.platform.pickFiles(
       type: FileType.custom, allowedExtensions: ['pdf'], withData: true);
-    if (picked == null || picked.files.single.bytes == null) return;
-    final imported = MyntraLabelParser.parse(picked.files.single.bytes!);
+    if (picked == null) return;
+    final bytes = picked.files.single.bytes;
+    if (bytes == null || bytes.isEmpty) {
+      throw Exception('The selected PDF is empty or could not be read. Please save the PDF and upload it again.');
+    }
+    final imported = MyntraLabelParser.parse(bytes);
     if (imported.isEmpty) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No Myntra Shipping Labels found. Tax Invoice pages are ignored.')));
+        const SnackBar(content: Text('No Myntra shipping labels found. Tax Invoice pages are not counted as orders.')));
       return;
     }
     final existing = rows('Daily Orders');
@@ -494,36 +503,15 @@ class _BusinessHomeState extends State<BusinessHome> {
         const SnackBar(content: Text('This PDF has already been imported.')));
       return;
     }
-    final firmOptions = _optionsFor('Daily Orders', 'Firm / Account');
-    String? firm = firmOptions.length == 1 ? firmOptions.first : null;
-    if (firmOptions.isNotEmpty && mounted) {
-      firm = await showDialog<String>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Select Firm / Account'),
-          content: DropdownButtonFormField<String>(
-            value: firm,
-            decoration: const InputDecoration(labelText: 'Firm'),
-            items: firmOptions.map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
-            onChanged: (v) => firm = v,
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Skip')),
-            FilledButton(onPressed: () => Navigator.pop(ctx, firm), child: const Text('Continue')),
-          ],
-        ),
-      );
-    }
-    for (final item in imported) {
-      item['Firm / Account'] = firm ?? '';
-    }
     final labelsCount = imported.map((e) => e['Label ID']).toSet().length;
     final skuCount = imported.length;
+    final firms = imported.map((e) => '${e['Firm / Account'] ?? ''}').where((v) => v.trim().isNotEmpty).toSet().toList();
+    final brands = imported.map((e) => '${e['Brand'] ?? ''}').where((v) => v.trim().isNotEmpty).toSet().length;
     final ok = mounted ? await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Myntra PDF preview'),
-        content: Text('$labelsCount Shipping Labels found\\n$skuCount SKU entries found\\nTax Invoice pages excluded\\nMultiple SKUs on one label are split into separate rows.'),
+        title: const Text('Review PDF import'),
+        content: Text('$labelsCount shipping labels found\n$skuCount SKU rows found\n$brands brands detected\n${firms.isEmpty ? 'Seller/Firm not found in PDF' : 'Seller/Firm: ${firms.join(', ')}'}\nTax Invoice pages are used for details only, not counted as orders.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Import Orders')),
@@ -535,11 +523,11 @@ class _BusinessHomeState extends State<BusinessHome> {
     if (mounted) {
       setState(() {});
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$labelsCount labels and $skuCount SKU rows imported.')));
+        SnackBar(content: Text('$labelsCount labels and $skuCount SKU rows imported successfully.')));
     }
   } catch (e) {
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('PDF import failed: $e')));
+      SnackBar(content: Text('PDF import failed: ${e.toString().replaceFirst('Exception: ', '')}')));
   }
  }
 
