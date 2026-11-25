@@ -47,21 +47,6 @@ class MyntraLabelParser {
     return qty == null || qty < 1 ? 1 : qty;
   }
 
-  static String _brandFor(String sku, String invoiceText) {
-    final compactInvoice = invoiceText.replaceAll(RegExp(r'\s+'), '');
-    final skuInInvoice = RegExp(
-      r'\(' + RegExp.escape(sku) + r'\)-([A-Za-z][A-Za-z&.-]{1,50}?)Women\b',
-      caseSensitive: false,
-    ).firstMatch(compactInvoice);
-    if (skuInInvoice != null) return skuInInvoice.group(1)!.trim();
-    final prefix = sku.split('-').first.toUpperCase().replaceAll('&', '_');
-    if (prefix == 'SA') return 'Sangria';
-    if (prefix == 'AL' || prefix == 'ALN' || prefix == 'AL2') return 'All About You';
-    if (prefix == 'H_N' || prefix == 'HA') return 'HERE&NOW';
-    if (prefix == 'LOOK') return 'JiproStore';
-    return prefix.isEmpty ? 'Unassigned' : prefix;
-  }
-
   static String _firmFrom(String labelText, String invoiceText) {
     final fromSeller = _first(
       RegExp(
@@ -90,9 +75,7 @@ class MyntraLabelParser {
       final pageTexts = <String>[];
       for (var pageIndex = 0; pageIndex < pageCount; pageIndex++) {
         try {
-          // Syncfusion's endPageIndex is an exclusive boundary. Passing
-          // pageIndex for the first page creates an empty range (0..0) and
-          // throws RangeError: max was 0. Use the next page as the boundary.
+          // Syncfusion's endPageIndex is exclusive; use pageIndex + 1.
           pageTexts.add(extractor.extractText(
             startPageIndex: pageIndex,
             endPageIndex: pageIndex + 1,
@@ -105,13 +88,12 @@ class MyntraLabelParser {
       for (var pageIndex = 0; pageIndex < pageTexts.length; pageIndex++) {
         final labelText = pageTexts[pageIndex];
         final skuMatches = _skuPattern.allMatches(labelText).toList();
+        // Count shipping-label pages only. The preceding invoice is detail-only.
         if (!labelText.toLowerCase().contains("buyer's name and address") ||
             skuMatches.isEmpty) {
           continue;
         }
 
-        // Read the invoice immediately before the label for details only.
-        // Only the shipping-label page is counted as an order.
         final invoiceText = pageIndex > 0 ? pageTexts[pageIndex - 1] : '';
         final orderId = _first(
           RegExp(r'Order Number:\s*([0-9-]+)', caseSensitive: false),
@@ -157,7 +139,6 @@ class MyntraLabelParser {
           final sku = (match.group(1) ?? '')
               .replaceAll(RegExp(r'\s+'), '')
               .toUpperCase();
-          final brand = _brandFor(sku, invoiceText);
           final invoiceQty = _quantityForSku(sku, invoiceText);
           final shipmentRef = (match.group(2) ?? '').trim();
           final size = RegExp(r'-(XS|S|M|L|XL|XXL|3XL|4XL)$', caseSensitive: false)
@@ -168,7 +149,7 @@ class MyntraLabelParser {
             'Firm / Account': firm,
             'Order ID': orderId,
             'SKU / Product': sku,
-            'Brand': brand,
+            'Brand': 'JIPROSTORE',
             'Size': size,
             'Color': '',
             'Orders Qty': invoiceQty.toString(),
