@@ -23,8 +23,8 @@ class MyntraLabelParser {
   }
 
   static String _invoiceBlockForSku(String sku, String invoiceText) {
-    final compact = invoiceText.replaceAll(RegExp(r'\s+'), '');
-    final current = compact.indexOf('(' + sku + ')');
+    final compact = invoiceText.replaceAll(RegExp(r'\s+'), '').toUpperCase();
+    final current = compact.indexOf('(' + sku.toUpperCase() + ')');
     if (current < 0) return '';
     final nextSku = RegExp(r'\([A-Z0-9][A-Z0-9_&-]{4,}\)-', caseSensitive: false);
     int? nextStart;
