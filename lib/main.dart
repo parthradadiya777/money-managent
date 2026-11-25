@@ -269,6 +269,8 @@ class _BusinessHomeState extends State<BusinessHome> {
   Chip(avatar:Icon(Icons.circle,size:9,color:_syncMessage=='Cloud synced'?Colors.green:Colors.orange),
    label:Text(_syncMessage ?? (box.get('cloudToken') != null ? 'Cloud sync' : 'Local data'))),
   if (CloudSyncService.configured && box.get('cloudToken') != null)
+   IconButton(tooltip:'Sync now', onPressed:_syncOnStart, icon:const Icon(Icons.sync)),
+  if (CloudSyncService.configured && box.get('cloudToken') != null)
    IconButton(tooltip:'Logout', onPressed:() async {
     await box.delete('cloudToken');
     if (mounted) Navigator.of(context).pushAndRemoveUntil(
