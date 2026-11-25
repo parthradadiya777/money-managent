@@ -213,7 +213,7 @@ class _BusinessHomeState extends State<BusinessHome> {
   super.initState();
   WidgetsBinding.instance.addPostFrameCallback((_) => _syncOnStart());
  }
- String _newSyncId() => '${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(1 << 32)}';
+ String _newSyncId() => '${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(0x7fffffff)}';
  Future<void> _syncOnStart() async {
   final token = box.get('cloudToken') as String?;
   if (!CloudSyncService.configured || token == null || token.isEmpty) return;
