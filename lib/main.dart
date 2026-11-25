@@ -3,14 +3,19 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart';
 import 'dart:math';
+import 'dart:convert';
+import 'package:flutter/services.dart';
 import 'dart:typed_data';
 import 'cloud_sync.dart';
+
+Uint8List? brandLogoBytes;
 
 const bool isTestEnvironment = String.fromEnvironment('APP_ENV') == 'test';
 const String hiveBoxName = isTestEnvironment ? 'business_manager_test' : 'business_manager';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try { brandLogoBytes = base64Decode(await rootBundle.loadString('assets/digitechified_logo.b64')); } catch (_) {}
   await Hive.initFlutter();
   final dataBox = await Hive.openBox(hiveBoxName);
   if (dataBox.get('Masters') == null) {
@@ -55,13 +60,12 @@ class BrandMark extends StatelessWidget {
   const BrandMark({super.key, this.size = 48});
   @override
   Widget build(BuildContext context) => Container(
-    width: size, height: size,
-    decoration: BoxDecoration(color: const Color(0xFF080808), borderRadius: BorderRadius.circular(size * .2)),
+    width: size * 2.7, height: size,
+    decoration: BoxDecoration(color: const Color(0xFF080808), borderRadius: BorderRadius.circular(size * .12)),
     alignment: Alignment.center,
-    child: Text('D', style: TextStyle(
-      color: const Color(0xFFFFC44F), fontSize: size * .78,
-      fontWeight: FontWeight.w900, height: 1,
-    )),
+    child: brandLogoBytes == null
+      ? Text('D', style: TextStyle(color: const Color(0xFFFFC44F), fontSize: size * .78, fontWeight: FontWeight.w900, height: 1))
+      : ClipRRect(borderRadius: BorderRadius.circular(size * .16), child: Image.memory(brandLogoBytes!, width: size * 2.7, height: size, fit: BoxFit.contain)),
   );
 }
 
