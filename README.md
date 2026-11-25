@@ -1,16 +1,50 @@
-# moneymanagement
+# Digitechified Business Manager
 
-A new Flutter project.
+Flutter app for multi-marketplace orders, GST entities, returns/RTO, vendor purchases, settlements, bank transactions and expenses.
 
-## Getting Started
+## Supported targets
+- Web
+- Android
+- Windows desktop
 
-This project is a starting point for a Flutter application.
+## Current MVP
+- Dashboard with orders, delivered sales, returns, RTO, settlements and bank summaries
+- Manual entry for orders, returns/RTO, purchases, vendor payments, settlements, bank transactions and expenses
+- Excel import/export per module
+- Marketplace starter list: Meesho, Myntra, Flipkart, Amazon and AJIO
+- Firm starter list: JPWels, House of Ishika and Jipro Store
 
-A few resources to get you started if this is your first Flutter project:
+## Run locally
+Install the current stable Flutter SDK (Dart 3 or newer):
 
-- [Lab: Write your first Flutter app](https://flutter.dev/docs/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://flutter.dev/docs/cookbook)
+```bash
+flutter pub get
+flutter run -d chrome
+```
 
-For help getting started with Flutter, view our
-[online documentation](https://flutter.dev/docs), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Android:
+```bash
+flutter run -d android
+flutter build apk --release
+```
+
+Windows (Windows 10/11 + Visual Studio Desktop development with C++ workload):
+```bash
+flutter create --platforms=windows --org com.digitechified .
+flutter run -d windows
+flutter build windows --release
+```
+
+## Important data limitation
+The current MVP stores records locally in the browser/device using Hive. **It does not yet synchronize data between Web, Android and Windows.** Do not use it as the sole live accounting database yet. The production phase must add authenticated cloud storage, business/tenant separation, roles, backups, audit history and conflict-safe synchronization before central business use.
+
+## CI builds
+GitHub Actions builds the Web bundle and prepares Android and Windows scaffolding before creating APK and Windows release artifacts. Workflow: `.github/workflows/flutter-build.yml`.
+
+## Initial business setup
+Masters includes editable examples:
+- JPWels — Meesho
+- House of Ishika — Meesho
+- Jipro Store — Myntra
+
+Enter the actual GSTIN, state, bank details and remaining marketplace-to-firm mappings before recording live transactions.
