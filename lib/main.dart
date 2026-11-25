@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'dart:typed_data';
 import 'cloud_sync.dart';
 import 'myntra_label_parser.dart';
+import 'meesho_label_parser.dart';
 
 Uint8List? brandLogoBytes;
 
@@ -500,9 +501,9 @@ class _BusinessHomeState extends State<BusinessHome> {
     ),
   );
   if (selectedPlatform == null) return;
-  if (selectedPlatform != 'Myntra') {
+  if (!['Myntra', 'Meesho'].contains(selectedPlatform)) {
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$selectedPlatform PDF parser is not enabled yet. Myntra shipping labels are supported in this build.')));
+      SnackBar(content: Text('$selectedPlatform PDF parser is not available yet. Please choose Myntra or Meesho.')));
     return;
   }
   try {
@@ -513,10 +514,12 @@ class _BusinessHomeState extends State<BusinessHome> {
     if (bytes == null || bytes.isEmpty) {
       throw Exception('The selected PDF is empty or could not be read. Please save the PDF and upload it again.');
     }
-    final imported = MyntraLabelParser.parse(bytes);
+    final imported = selectedPlatform == 'Myntra'
+        ? MyntraLabelParser.parse(bytes)
+        : MeeshoLabelParser.parse(bytes);
     if (imported.isEmpty) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No Myntra shipping labels found. Tax Invoice pages are not counted as orders.')));
+        const SnackBar(content: Text('No $selectedPlatform shipping labels found. Check that the correct marketplace PDF was selected.')));
       return;
     }
     final existing = rows('Daily Orders');
