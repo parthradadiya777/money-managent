@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'dart:typed_data';
 import 'cloud_sync.dart';
+import 'myntra_label_parser.dart';
 
 Uint8List? brandLogoBytes;
 
@@ -44,7 +45,7 @@ class BusinessManagerApp extends StatelessWidget {
 const platforms = ['Meesho', 'Myntra', 'Flipkart', 'Amazon', 'AJIO'];
 const modules = ['Dashboard','Daily Orders','Returns & RTO','Purchases','Vendor Payments','Settlements','Bank Transactions','Expenses','Masters'];
 const Map<String,List<String>> fields = {
- 'Daily Orders':['Date','Platform','Firm / Account','Order ID','SKU / Product','Size','Color','Orders Qty','Gross Order Value','Delivered Qty','Delivered Sales','Commission / Fees','Shipping Fees','Other Deductions','Courier','AWB / Tracking No.','Customer','Pincode','Source PDF','PDF Page'],
+ 'Daily Orders':['Date','Platform','Firm / Account','Order ID','SKU / Product','Brand','Size','Color','Orders Qty','Gross Order Value','Delivered Qty','Delivered Sales','Commission / Fees','Shipping Fees','Other Deductions','Courier','AWB / Tracking No.','Customer','Pincode','Source PDF','PDF Page'],
  'Returns & RTO':['Date','Platform','Firm / Account','Order ID','SKU / Product','Type','Qty','Refund / Loss Amount','Return Shipping','Reason','Status'],
  'Purchases':['Purchase Date','Firm / GST Entity','Vendor Name','Invoice No.','SKU / Product','Qty','Taxable Value','GST %','GST Amount','Invoice Total','Paid Amount','Balance Due'],
  'Vendor Payments':['Payment Date','Firm / GST Entity','Vendor Name','Purchase Invoice No.','Payment Mode','Reference / UTR','Amount Paid','Notes'],
@@ -387,7 +388,7 @@ class _BusinessHomeState extends State<BusinessHome> {
     FilledButton.icon(onPressed:()=>_addRecord(module),icon:const Icon(Icons.add),label:const Text('Add Manually')),
     OutlinedButton.icon(onPressed:()=>_importExcel(module),icon:const Icon(Icons.file_upload_outlined),label:const Text('Import Excel')),
     OutlinedButton.icon(onPressed:()=>_exportExcel(module),icon:const Icon(Icons.file_download_outlined),label:const Text('Export Excel')),
-     if(module=='Daily Orders') const Tooltip(message:'Platform-specific PDF extraction is being completed and tested.',child:FilledButton.tonalIcon(onPressed:null,icon:Icon(Icons.picture_as_pdf_outlined),label:Text('PDF Import — coming next'))),
+     if(module=='Daily Orders') FilledButton.tonalIcon(onPressed:()=>_importShippingPdf(),icon:const Icon(Icons.picture_as_pdf_outlined),label:const Text('Import Shipping Label PDF')),
    ]),
    const SizedBox(height:16),if(module=='Daily Orders')_dailyOrderSummary(data),if(module=='Masters')_masterHint(),
    if(data.isEmpty)Container(padding:const EdgeInsets.all(32),decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(16)),child:const Column(children:[
@@ -410,12 +411,19 @@ class _BusinessHomeState extends State<BusinessHome> {
  Widget _dailyOrderSummary(List<Map> data) {
   final byPlatform=<String,num>{};
   final byFirm=<String,num>{};
+  final byBrand=<String,num>{};
+  final labels=<String>{};
   for(final row in data) {
    final platform='\u0024{row['Platform']??'Unknown'}'.trim();
    final firm='\u0024{row['Firm / Account']??'Unassigned'}'.trim();
+   final sku='\u0024{row['SKU / Product']??''}'.trim();
+   final brand='\u0024{row['Brand']??(sku.isEmpty?'Unassigned':sku.split('-').first)}'.trim();
+   final labelId='\u0024{row['Label ID']??''}'.trim();
+   if(labelId.isNotEmpty) labels.add(labelId);
    final qty=num.tryParse('\u0024{row['Orders Qty']??1}')??1;
    byPlatform[platform]=(byPlatform[platform]??0)+qty;
    byFirm[firm]=(byFirm[firm]??0)+qty;
+   byBrand[brand]=(byBrand[brand]??0)+qty;
   }
   Widget group(String title,Map<String,num> values) => Card(
    color:Colors.white,elevation:0,child:Padding(padding:const EdgeInsets.all(14),
@@ -427,12 +435,104 @@ class _BusinessHomeState extends State<BusinessHome> {
       child:Row(children:[Expanded(child:Text(e.key)),Text(e.value.toStringAsFixed(0),style:const TextStyle(fontWeight:FontWeight.bold))]))),
     ])));
   return Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-   Row(children:[Expanded(child:group('Platform-wise order quantity',byPlatform)),const SizedBox(width:10),Expanded(child:group('Brand / Firm-wise order quantity',byFirm))]),
+   Wrap(spacing:10,runSpacing:10,children:[_metric('Shipping Labels',labels.length,Icons.local_shipping, const Color(0xFF2457C5),false),_metric('SKU Lines',data.length,Icons.inventory_2, const Color(0xFF7C4DFF),false)]),
+   const SizedBox(height:8),
+   Row(children:[Expanded(child:group('Platform-wise order quantity',byPlatform)),const SizedBox(width:10),Expanded(child:group('Brand-wise order quantity',byBrand))]),
+   const SizedBox(height:8),
+   group('Firm / Account-wise order quantity',byFirm),
    const SizedBox(height:8),
    const Text('Quantity is summed from Orders Qty. Multi-SKU labels must be split into separate order lines by the PDF importer.',style:TextStyle(color:Colors.black54,fontSize:12)),
   ]);
  }
 \n Widget _masterHint()=>Container(padding:const EdgeInsets.all(12),margin:const EdgeInsets.only(bottom:12),decoration:BoxDecoration(color:const Color(0xFFEAF2FF),borderRadius:BorderRadius.circular(12)),child:const Text('Add firms, GSTINs and vendor details here. Starter examples: Demo Fashion Store, Demo Home Store, Demo Myntra Store and all five marketplaces.',style:TextStyle(color:Color(0xFF24477E))));
+
+ Future<void> _importShippingPdf() async {
+  String platform = 'Myntra';
+  final selectedPlatform = await showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Select marketplace PDF'),
+      content: DropdownButtonFormField<String>(
+        value: platform,
+        decoration: const InputDecoration(labelText: 'Marketplace'),
+        items: platforms.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
+        onChanged: (v) { if (v != null) platform = v; },
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(ctx, platform), child: const Text('Continue')),
+      ],
+    ),
+  );
+  if (selectedPlatform == null) return;
+  if (selectedPlatform != 'Myntra') {
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$selectedPlatform PDF format parser will be added separately. Myntra is available now.')));
+    return;
+  }
+  try {
+    final picked = await FilePicker.platform.pickFiles(
+      type: FileType.custom, allowedExtensions: ['pdf'], withData: true);
+    if (picked == null || picked.files.single.bytes == null) return;
+    final imported = MyntraLabelParser.parse(picked.files.single.bytes!);
+    if (imported.isEmpty) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No Myntra Shipping Labels found. Tax Invoice pages are ignored.')));
+      return;
+    }
+    final existing = rows('Daily Orders');
+    final sourceName = picked.files.single.name;
+    for (final item in imported) {
+      item['Source PDF'] = sourceName;
+    }
+    final firmOptions = _optionsFor('Daily Orders', 'Firm / Account');
+    String? firm = firmOptions.length == 1 ? firmOptions.first : null;
+    if (firmOptions.isNotEmpty && mounted) {
+      firm = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Select Firm / Account'),
+          content: DropdownButtonFormField<String>(
+            value: firm,
+            decoration: const InputDecoration(labelText: 'Firm'),
+            items: firmOptions.map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
+            onChanged: (v) => firm = v,
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Skip')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, firm), child: const Text('Continue')),
+          ],
+        ),
+      );
+    }
+    for (final item in imported) {
+      item['Firm / Account'] = firm ?? '';
+    }
+    final labelsCount = imported.map((e) => e['Label ID']).toSet().length;
+    final skuCount = imported.length;
+    final ok = mounted ? await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Myntra PDF preview'),
+        content: Text('$labelsCount Shipping Labels found\\n$skuCount SKU entries found\\nTax Invoice pages excluded\\nMultiple SKUs on one label are split into separate rows.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Import Orders')),
+        ],
+      ),
+    ) : false;
+    if (ok != true) return;
+    await saveRows('Daily Orders', [...existing, ...imported]);
+    if (mounted) {
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$labelsCount labels and $skuCount SKU rows imported.')));
+    }
+  } catch (e) {
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('PDF import failed: $e')));
+  }
+ }
 
  Future<void> _quickAdd()async{
   final choice=await showModalBottomSheet<String>(context:context,builder:(c)=>SafeArea(child:Column(mainAxisSize:MainAxisSize.min,children:[
