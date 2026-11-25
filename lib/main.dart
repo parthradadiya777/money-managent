@@ -484,6 +484,14 @@ class _BusinessHomeState extends State<BusinessHome> {
     final sourceName = picked.files.single.name;
     for (final item in imported) {
       item['Source PDF'] = sourceName;
+      item['Label ID'] = '$sourceName-${item['Label ID']}';
+    }
+    final knownLabels = existing.map((e) => '${e['Label ID'] ?? ''}').toSet();
+    imported.removeWhere((e) => knownLabels.contains('${e['Label ID']}'));
+    if (imported.isEmpty) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This PDF has already been imported.')));
+      return;
     }
     final firmOptions = _optionsFor('Daily Orders', 'Firm / Account');
     String? firm = firmOptions.length == 1 ? firmOptions.first : null;
