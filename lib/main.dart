@@ -31,7 +31,7 @@ class BusinessManagerApp extends StatelessWidget {
   Widget build(BuildContext context) => MaterialApp(
     debugShowCheckedModeBanner: false,
     title: 'Digitechified Business Manager',
-    theme: ThemeData(useMaterial3: true, colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2457C5)), scaffoldBackgroundColor: const Color(0xFFF5F7FB), inputDecorationTheme: const InputDecorationTheme(border: OutlineInputBorder(), filled: true, fillColor: Colors.white)),
+    theme: ThemeData(useMaterial3: true, colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2457C5)), scaffoldBackgroundColor: const Color(0xFFF5F7FB), visualDensity: VisualDensity.standard, cardTheme: const CardThemeData(margin: EdgeInsets.zero), inputDecorationTheme: const InputDecorationTheme(border: OutlineInputBorder(), filled: true, fillColor: Colors.white, contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 13))),
     home: const AuthGate(),
   );
 }
@@ -49,6 +49,21 @@ const Map<String,List<String>> fields = {
  'Masters':['Record Type','Name','GSTIN','State','Platform','Contact','Opening Balance','Notes'],
 };
 
+
+class BrandMark extends StatelessWidget {
+  final double size;
+  const BrandMark({super.key, this.size = 48});
+  @override
+  Widget build(BuildContext context) => Container(
+    width: size, height: size,
+    decoration: BoxDecoration(color: const Color(0xFF080808), borderRadius: BorderRadius.circular(size * .2)),
+    alignment: Alignment.center,
+    child: Text('D', style: TextStyle(
+      color: const Color(0xFFFFC44F), fontSize: size * .78,
+      fontWeight: FontWeight.w900, height: 1,
+    )),
+  );
+}
 
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
@@ -128,7 +143,7 @@ class _LoginPageState extends State<LoginPage> {
           child: Padding(
             padding: const EdgeInsets.all(28),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              const Icon(Icons.account_balance_wallet_rounded, size: 46, color: Color(0xFF2457C5)),
+              const BrandMark(size: 62),
               const SizedBox(height: 14),
               const Text('DIGITECHIFIED', textAlign: TextAlign.center,
                 style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.4)),
@@ -254,7 +269,7 @@ class _BusinessHomeState extends State<BusinessHome> {
  }
  Widget _sideNav()=>Container(width:235,color:const Color(0xFF101D3A),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
   const Padding(padding:EdgeInsets.fromLTRB(20,28,16,24),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-   Icon(Icons.account_balance_wallet_rounded,color:Colors.white,size:30),SizedBox(height:12),
+   BrandMark(size:46),SizedBox(height:12),
    Text('DIGITECHIFIED',style:TextStyle(color:Colors.white,fontWeight:FontWeight.bold,letterSpacing:1.2)),
    Text('Business Manager',style:TextStyle(color:Color(0xFFB9C7E5),fontSize:12)),
   ])),
@@ -360,10 +375,14 @@ class _BusinessHomeState extends State<BusinessHome> {
  Widget _modulePage(String module){
   final data=rows(module),cols=fields[module]??[];
   return ListView(padding:const EdgeInsets.all(22),children:[
-   Row(children:[
-    Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('${data.length} records',style:const TextStyle(color:Colors.black54)),const SizedBox(height:3),const Text('Manage records and upload your Excel file.',style:TextStyle(fontWeight:FontWeight.w600))])),
-    OutlinedButton.icon(onPressed:()=>_importExcel(module),icon:const Icon(Icons.upload_file),label:const Text('Import Excel')),const SizedBox(width:8),
-    FilledButton.icon(onPressed:()=>_addRecord(module),icon:const Icon(Icons.add),label:const Text('Add New')),
+   Text('${data.length} records',style:const TextStyle(color:Colors.black54)),
+   const SizedBox(height:4),
+   const Text('Manage your records, import a workbook or download an Excel template.',style:TextStyle(fontWeight:FontWeight.w600)),
+   const SizedBox(height:14),
+   Wrap(spacing:10,runSpacing:10,children:[
+    FilledButton.icon(onPressed:()=>_addRecord(module),icon:const Icon(Icons.add),label:const Text('Add Manually')),
+    OutlinedButton.icon(onPressed:()=>_importExcel(module),icon:const Icon(Icons.file_upload_outlined),label:const Text('Import Excel')),
+    OutlinedButton.icon(onPressed:()=>_exportExcel(module),icon:const Icon(Icons.file_download_outlined),label:const Text('Export Excel')),
    ]),
    const SizedBox(height:16),if(module=='Masters')_masterHint(),
    if(data.isEmpty)Container(padding:const EdgeInsets.all(32),decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(16)),child:const Column(children:[
@@ -379,7 +398,7 @@ class _BusinessHomeState extends State<BusinessHome> {
      ])),
     ]);}).toList(),
    ))),
-   const SizedBox(height:12),if(data.isNotEmpty)Align(alignment:Alignment.centerRight,child:TextButton.icon(onPressed:()=>_exportExcel(module),icon:const Icon(Icons.download),label:const Text('Export Excel'))),
+
   ]);
  }
  Widget _masterHint()=>Container(padding:const EdgeInsets.all(12),margin:const EdgeInsets.only(bottom:12),decoration:BoxDecoration(color:const Color(0xFFEAF2FF),borderRadius:BorderRadius.circular(12)),child:const Text('Add firms, GSTINs and vendor details here. Starter examples: Demo Fashion Store, Demo Home Store, Demo Myntra Store and all five marketplaces.',style:TextStyle(color:Color(0xFF24477E))));
@@ -398,11 +417,53 @@ class _BusinessHomeState extends State<BusinessHome> {
   if(controllers.containsKey('Platform'))controllers['Platform']!.text='Meesho';
   for(final f in ['Firm / Account','Firm / GST Entity']){if(controllers.containsKey(f))controllers[f]!.text='Demo Fashion Store';}
   final ok=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(
-   title:Text('Add $module'),content:SizedBox(width:520,child:SingleChildScrollView(child:Column(children:controllers.entries.map((e)=>Padding(padding:const EdgeInsets.only(bottom:10),child:TextField(controller:e.value,decoration:InputDecoration(labelText:e.key),keyboardType:_numeric(e.key)?TextInputType.number:TextInputType.text))).toList()))),
+   title:Text('Add $module'),content:SizedBox(width:520,child:SingleChildScrollView(child:Column(children:controllers.entries.map((e)=>Padding(padding:const EdgeInsets.only(bottom:12),child:_formField(module,e.key,e.value))).toList()))),
    actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Save Record'))],
   ));
   if(ok==true){final record=<String,dynamic>{for(final e in controllers.entries)e.key:e.value.text.trim()};final list=rows(module)..add(record);await saveRows(module,list);if(mounted)setState((){});}
   for(final c in controllers.values){c.dispose();}
+ }
+ List<String> _optionsFor(String module, String field) {
+  final normalized = field.toLowerCase();
+  if (normalized == 'platform') {
+    final saved = rows('Masters').where((r) => '${r['Record Type']}'.toLowerCase() == 'platform').map((r) => '${r['Name']}'.trim()).where((v) => v.isNotEmpty);
+    return {...platforms, ...saved}.toList();
+  }
+  if (normalized.contains('firm') || normalized.contains('account') || normalized.contains('gst entity')) {
+    return rows('Masters').where((r) => '${r['Record Type']}'.toLowerCase() == 'firm').map((r) => '${r['Name']}'.trim()).where((v) => v.isNotEmpty).toSet().toList();
+  }
+  if (normalized == 'type') return ['Return', 'RTO'];
+  if (normalized == 'status') return ['Pending', 'Completed', 'On Hold', 'Cancelled'];
+  if (normalized.contains('payment mode')) return ['Bank Transfer', 'UPI', 'Cash', 'Cheque', 'Other'];
+  if (normalized == 'record type') return ['Firm', 'Platform', 'Vendor', 'Bank Account', 'Expense Category'];
+  if (normalized == 'state') return ['Gujarat', 'Maharashtra', 'Rajasthan', 'Delhi', 'Karnataka', 'Other'];
+  if (normalized == 'gst %') return ['0', '5', '12', '18', '28'];
+  if (normalized == 'bank account') {
+    return rows('Masters').where((r) => '${r['Record Type']}'.toLowerCase() == 'bank account').map((r) => '${r['Name']}'.trim()).where((v) => v.isNotEmpty).toSet().toList();
+  }
+  return const [];
+ }
+ Widget _formField(String module, String field, TextEditingController controller) {
+  final options = _optionsFor(module, field);
+  final dropdown = options.isEmpty ? const SizedBox.shrink() : Padding(
+   padding: const EdgeInsets.only(bottom: 7),
+   child: DropdownButtonFormField<String>(
+    initialValue: options.contains(controller.text) ? controller.text : null,
+    isExpanded: true,
+    decoration: InputDecoration(labelText: 'Choose $field (optional)', prefixIcon: const Icon(Icons.arrow_drop_down_circle_outlined)),
+    hint: const Text('Select or type below'),
+    items: options.map((v) => DropdownMenuItem(value: v, child: Text(v, overflow: TextOverflow.ellipsis))).toList(),
+    onChanged: (value) { if (value != null) controller.text = value; },
+   ),
+  );
+  return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+   dropdown,
+   TextField(controller: controller, decoration: InputDecoration(
+    labelText: options.isEmpty ? field : 'Or enter $field manually',
+    hintText: 'Enter $field',
+    prefixIcon: _numeric(field) ? const Icon(Icons.numbers) : null,
+   ), keyboardType: _numeric(field) ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text),
+  ]);
  }
  bool _numeric(String key)=>['Qty','Value','Sales','Fees','Shipping','Deductions','Amount','GST %','Credit','Debit','Balance','Paid','Received'].any((v)=>key.toLowerCase().contains(v.toLowerCase()));
  Future<void> _editRecord(String module,int index) async {
@@ -418,8 +479,7 @@ class _BusinessHomeState extends State<BusinessHome> {
    content:SizedBox(width:520,child:SingleChildScrollView(child:Column(
     children:controllers.entries.map((e)=>Padding(
      padding:const EdgeInsets.only(bottom:10),
-     child:TextField(controller:e.value,decoration:InputDecoration(labelText:e.key),
-      keyboardType:_numeric(e.key)?TextInputType.number:TextInputType.text),
+     child:_formField(module,e.key,e.value),
     )).toList(),
    ))),
    actions:[
