@@ -1,5 +1,5 @@
 from uuid import UUID
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select, delete
 from sqlalchemy.orm import Session
@@ -100,6 +100,79 @@ def batch_upsert(data: RecordBatchIn, user: User = Depends(current_user), db: Se
         saved += 1
     db.commit()
     return {"ok": True, "saved": saved}
+
+
+
+
+@app.post("/api/orders/parse-label-pdf")
+async def parse_label_pdf(
+    file: UploadFile = File(...),
+    platform: str = Form(...),
+    firm: str = Form(""),
+    user: User = Depends(current_user),
+):
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Please upload a PDF file")
+    raw = await file.read()
+    if len(raw) > 20 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="PDF must be 20 MB or smaller")
+    try:
+        from pypdf import PdfReader
+        import io, re
+        reader = PdfReader(io.BytesIO(raw))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Could not read this PDF")
+    records = []
+    skipped = 0
+    for page_no, page in enumerate(reader.pages, start=1):
+        text = page.extract_text() or ""
+        # Only inspect the shipping-label portion; never use invoice data.
+        label = re.split(r"TAX\\s+INVOICE", text, flags=re.I)[0]
+        match = re.search(r"SKU\\s+Size\\s+Qty\\s+Color\\s+Order\\s+No\\.?\\s*(.*)", label, flags=re.I|re.S)
+        if not match:
+            # Some Myntra label layouts use a compact item row.
+            match = re.search(r"Product\\s+Details\\s*(.*)", label, flags=re.I|re.S)
+        if not match:
+            skipped += 1
+            continue
+        section = match.group(1)
+        lines = [re.sub(r"\\s+", " ", x).strip() for x in section.splitlines() if x.strip()]
+        parsed = 0
+        for line in lines:
+            if re.search(r"^(SKU|Size|Qty|Color|Order No)", line, re.I):
+                continue
+            # Common Meesho label row: SKU, size, quantity, color, marketplace order id.
+            row = re.match(r"^(\\S+)\\s+(.+?)\\s+(\\d+)\\s+([A-Za-z][A-Za-z -]*?)\\s+(\\d{12,}(?:_\\d+)?)$", line)
+            if not row:
+                continue
+            sku, size, qty, color, order_id = row.groups()
+            head = label[:match.start()]
+            courier_match = re.search(r"\\b(Delhivery|Shadowfax|Ecom Express|Blue Dart|Xpressbees|Ekart)\\b", head, re.I)
+            awb_match = re.search(r"(?<!\\d)(?:SF)?[A-Z0-9]{10,22}(?!\\w)", head)
+            customer_match = re.search(r"Customer Address\\s+(.+?)(?:\\s+If undelivered|\\s+COD:)", head, re.I|re.S)
+            customer = re.sub(r"\\s+", " ", customer_match.group(1)).strip() if customer_match else ""
+            pin_match = re.search(r"\\b(\\d{6})\\b", customer)
+            records.append({
+                "Date": __import__("datetime").date.today().isoformat(),
+                "Platform": platform.strip(),
+                "Firm / Account": firm.strip(),
+                "Order ID": order_id,
+                "SKU / Product": sku,
+                "Size": size.strip(),
+                "Color": color.strip(),
+                "Orders Qty": int(qty),
+                "Courier": courier_match.group(1) if courier_match else "",
+                "AWB / Tracking No.": awb_match.group(0) if awb_match else "",
+                "Customer": customer,
+                "Pincode": pin_match.group(1) if pin_match else "",
+                "Source PDF": file.filename,
+                "PDF Page": page_no,
+                "Import Type": "Shipping Label",
+            })
+            parsed += 1
+        if parsed == 0:
+            skipped += 1
+    return {"records": records, "pages": len(reader.pages), "skipped_pages": skipped, "parsed_lines": len(records)}
 
 
 @app.delete("/api/records/{record_id}")
