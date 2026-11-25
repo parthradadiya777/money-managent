@@ -43,7 +43,7 @@ class MyntraLabelParser {
         final pageNumber = i + 1;
 
         for (final match in skuMatches) {
-          final sku = (match.group(1) ?? '').trim().toUpperCase();
+          final sku = (match.group(1) ?? '').replaceAll(RegExp(r'\\s+'), '').toUpperCase();
           final qtyToken = (match.group(2) ?? '').trim();
           final parsedQty = int.tryParse(qtyToken.replaceAll(RegExp(r'[^0-9]'), ''));
           final qty = parsedQty == null || parsedQty < 1 ? 1 : parsedQty;
