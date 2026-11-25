@@ -506,81 +506,45 @@ class _BusinessHomeState extends State<BusinessHome> {
   String platform = 'Myntra';
   final selectedPlatform = await showDialog<String>(
     context: context,
-    builder: (ctx) => AlertDialog(
-      title: const Text('Choose marketplace PDF'),
-      content: DropdownButtonFormField<String>(
-        value: platform,
-        isExpanded: true,
-        decoration: const InputDecoration(labelText: 'Marketplace'),
-        items: platforms.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
-        onChanged: (v) { if (v != null) platform = v; },
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-        FilledButton(onPressed: () => Navigator.pop(ctx, platform), child: const Text('Choose PDF')),
-      ],
-    ),
+    builder: (ctx) => StatefulBuilder(builder:(ctx,setDialog)=>Dialog(
+      backgroundColor:const Color(0xFFF9F7F1),
+      shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(24)),
+      child:Padding(padding:const EdgeInsets.all(22),child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+       Row(children:[Container(width:46,height:46,decoration:BoxDecoration(color:const Color(0xFF111111),borderRadius:BorderRadius.circular(14)),child:const Icon(Icons.picture_as_pdf_rounded,color:Color(0xFFFFC84D))),const SizedBox(width:12),const Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('Import shipping labels',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold)),Text('Select marketplace PDF',style:TextStyle(color:Colors.black54,fontSize:12))]))]),
+       const SizedBox(height:22),
+       DropdownButtonFormField<String>(value:platform,isExpanded:true,decoration:const InputDecoration(labelText:'Marketplace',prefixIcon:Icon(Icons.storefront_outlined)),items:const ['Myntra','Meesho'].map((v)=>DropdownMenuItem(value:v,child:Text(v))).toList(),onChanged:(v){if(v!=null)setDialog(()=>platform=v);}),
+       const SizedBox(height:18),
+       Row(children:[Expanded(child:TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('Cancel'))),const SizedBox(width:8),Expanded(child:FilledButton.icon(onPressed:()=>Navigator.pop(ctx,platform),icon:const Icon(Icons.folder_open_rounded),label:const Text('Choose PDF')))])
+      ]))
+    )),
   );
-  if (selectedPlatform == null) return;
-  if (!['Myntra', 'Meesho'].contains(selectedPlatform)) {
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$selectedPlatform PDF parser is not available yet. Please choose Myntra or Meesho.')));
-    return;
-  }
+  if(selectedPlatform==null)return;
   try {
-    final picked = await FilePicker.platform.pickFiles(
-      type: FileType.custom, allowedExtensions: ['pdf'], withData: true);
-    if (picked == null) return;
-    final bytes = picked.files.single.bytes;
-    if (bytes == null || bytes.isEmpty) {
-      throw Exception('The selected PDF is empty or could not be read. Please save the PDF and upload it again.');
-    }
-    final imported = selectedPlatform == 'Myntra'
-        ? MyntraLabelParser.parse(bytes)
-        : MeeshoLabelParser.parse(bytes);
-    if (imported.isEmpty) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No $selectedPlatform shipping labels found. Check that the correct marketplace PDF was selected.')));
-      return;
-    }
-    final existing = rows('Daily Orders');
-    final sourceName = picked.files.single.name;
-    for (final item in imported) {
-      item['Source PDF'] = sourceName;
-      item['Label ID'] = '$sourceName-${item['Label ID']}';
-    }
-    final knownLabels = existing.map((e) => '${e['Label ID'] ?? ''}').toSet();
-    imported.removeWhere((e) => knownLabels.contains('${e['Label ID']}'));
-    if (imported.isEmpty) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('This PDF has already been imported.')));
-      return;
-    }
-    final labelsCount = imported.map((e) => e['Label ID']).toSet().length;
-    final skuCount = imported.length;
-    final firms = imported.map((e) => '${e['Firm / Account'] ?? ''}').where((v) => v.trim().isNotEmpty).toSet().toList();
-    final brands = imported.map((e) => '${e['Brand'] ?? ''}').where((v) => v.trim().isNotEmpty).toSet().length;
-    final ok = mounted ? await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Review PDF import'),
-        content: Text('$labelsCount shipping labels found\n$skuCount SKU rows found\n$brands brands detected\n${firms.isEmpty ? 'Seller/Firm not found in PDF' : 'Seller/Firm: ${firms.join(', ')}'}\nTax Invoice pages are used for details only, not counted as orders.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Import Orders')),
-        ],
-      ),
-    ) : false;
-    if (ok != true) return;
-    await saveRows('Daily Orders', [...existing, ...imported]);
-    if (mounted) {
-      setState(() {});
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$labelsCount labels and $skuCount SKU rows imported successfully.')));
-    }
-  } catch (e) {
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('PDF import failed: ${e.toString().replaceFirst('Exception: ', '')}')));
+   final picked=await FilePicker.platform.pickFiles(type:FileType.custom,allowedExtensions:['pdf'],withData:true);
+   if(picked==null)return;
+   final bytes=picked.files.single.bytes;
+   if(bytes==null||bytes.isEmpty)throw Exception('PDF file could not be read. Please choose the PDF again.');
+   final imported=selectedPlatform=='Myntra'?MyntraLabelParser.parse(bytes):MeeshoLabelParser.parse(bytes);
+   if(imported.isEmpty)throw Exception('No shipping labels detected. Please check the selected PDF.');
+   final existing=rows('Daily Orders');
+   final sourceName=picked.files.single.name;
+   for(final item in imported){
+    item['Source PDF']=sourceName;
+    item['Label ID']='$sourceName-${item['Label ID']}';
+    if(selectedPlatform=='Myntra')item['Brand']='JIPROSTORE';
+    if((item['Date']??'').toString().trim().isEmpty)item['Date']='Not detected';
+   }
+   final knownLabels=existing.map((e)=>'${e['Label ID']??''}').toSet();
+   imported.removeWhere((e)=>knownLabels.contains('${e['Label ID']}'));
+   if(imported.isEmpty)throw Exception('This PDF has already been imported.');
+   await saveRows('Daily Orders',[...existing,...imported]);
+   if(mounted){
+    setState((){});
+    final labelCount=imported.map((e)=>e['Label ID']).toSet().length;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('$labelCount shipping labels and ${imported.length} SKU rows added. Daily Orders updated.')));
+   }
+  }catch(e){
+   if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('PDF import failed: ${e.toString().replaceFirst('Exception: ','')}')));
   }
  }
 
@@ -595,15 +559,30 @@ class _BusinessHomeState extends State<BusinessHome> {
   final controllers=<String,TextEditingController>{};
   for(final f in fields[module]??[])controllers[f]=TextEditingController();
   for(final f in ['Date','Purchase Date','Payment Date','Settlement Date']){if(controllers.containsKey(f))controllers[f]!.text=DateTime.now().toIso8601String().substring(0,10);}
-  if(controllers.containsKey('Platform'))controllers['Platform']!.text='Meesho';
-  for(final f in ['Firm / Account','Firm / GST Entity']){if(controllers.containsKey(f))controllers[f]!.text='Demo Fashion Store';}
-  final ok=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(
-   title:Text('Add $module'),content:SizedBox(width:520,child:SingleChildScrollView(child:Column(children:controllers.entries.map((e)=>Padding(padding:const EdgeInsets.only(bottom:12),child:_formField(module,e.key,e.value))).toList()))),
-   actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Save Record'))],
+  if(controllers.containsKey('Platform'))controllers['Platform']!.text='Myntra';
+  if(controllers.containsKey('Brand'))controllers['Brand']!.text='JIPROSTORE';
+  final ok=await showDialog<bool>(context:context,builder:(ctx)=>Dialog(
+   backgroundColor:const Color(0xFFF9F7F1),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(24)),
+   child:ConstrainedBox(constraints:const BoxConstraints(maxWidth:560,maxHeight:720),child:Padding(padding:const EdgeInsets.all(22),child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+    Row(children:[Container(width:44,height:44,decoration:BoxDecoration(color:const Color(0xFF111111),borderRadius:BorderRadius.circular(13)),child:const Icon(Icons.edit_note_rounded,color:Color(0xFFFFC84D),size:26)),const SizedBox(width:12),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('Add $module',style:const TextStyle(fontSize:19,fontWeight:FontWeight.bold)),const Text('Enter order details below',style:TextStyle(color:Colors.black54,fontSize:12))]))]),
+    const SizedBox(height:16),
+    Expanded(child:SingleChildScrollView(child:Column(children:controllers.entries.map((e)=>Padding(padding:const EdgeInsets.only(bottom:12),child:_formField(module,e.key,e.value))).toList()))),
+    const SizedBox(height:10),
+    Row(children:[Expanded(child:TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel'))),const SizedBox(width:8),Expanded(child:FilledButton.icon(onPressed:()=>Navigator.pop(ctx,true),icon:const Icon(Icons.save_rounded),label:const Text('Save Record')))])
+   ]))),
   ));
-  if(ok==true){final record=<String,dynamic>{for(final e in controllers.entries)e.key:e.value.text.trim()};if(record.values.every((v)=>'$v'.trim().isEmpty)){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Please enter at least one field.')));}else{final list=rows(module)..add(record);await saveRows(module,list);if(mounted){setState((){});ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Record added successfully.')));}}}
-  for(final c in controllers.values){c.dispose();}
+  if(ok==true){
+   final record=<String,dynamic>{for(final e in controllers.entries)e.key:e.value.text.trim()};
+   if(record.values.every((v)=>'$v'.trim().isEmpty)){
+    if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Please enter at least one field.')));
+   }else{
+    final list=rows(module)..add(record);await saveRows(module,list);
+    if(mounted){setState((){});ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Record added successfully.')));}
+   }
+  }
+  for(final controller in controllers.values){controller.dispose();}
  }
+
  List<String> _optionsFor(String module, String field) {
   final normalized = field.toLowerCase();
   if (normalized == 'platform') {
