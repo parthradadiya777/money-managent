@@ -12,7 +12,7 @@ class MyntraLabelParser {
           endPageIndex: i,
         );
         final skuMatches = RegExp(
-          r'\[\s*([A-Z0-9][A-Z0-9_\\s-]*?)\s*\*\s*([^\]]+)\]',
+          r'\[\s*([A-Z0-9][A-Z0-9_\s-]*?)\s*\*\s*([^\]]+)\]',
           caseSensitive: false,
         ).allMatches(text).toList();
         // Myntra PDFs contain a Tax Invoice page followed by its shipping
@@ -43,7 +43,7 @@ class MyntraLabelParser {
         final pageNumber = i + 1;
 
         for (final match in skuMatches) {
-          final sku = (match.group(1) ?? '').replaceAll(RegExp(r'\\s+'), '').toUpperCase();
+          final sku = (match.group(1) ?? '').replaceAll(RegExp(r'\s+'), '').toUpperCase();
           final qtyToken = (match.group(2) ?? '').trim();
           final parsedQty = int.tryParse(qtyToken.replaceAll(RegExp(r'[^0-9]'), ''));
           final qty = parsedQty == null || parsedQty < 1 ? 1 : parsedQty;
