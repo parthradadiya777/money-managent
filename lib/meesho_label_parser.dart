@@ -30,10 +30,10 @@ class MeeshoLabelParser {
       for (var pageIndex = 0; pageIndex < pageCount; pageIndex++) {
         String pageText;
         try {
-          // Syncfusion's endPageIndex is an exclusive boundary.
+          // Syncfusion's endPageIndex is inclusive; keep it within the page count.
           pageText = extractor.extractText(
             startPageIndex: pageIndex,
-            endPageIndex: pageIndex + 1,
+            endPageIndex: pageIndex,
           );
         } catch (_) {
           continue;
