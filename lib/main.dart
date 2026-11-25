@@ -380,12 +380,34 @@ class _BusinessHomeState extends State<BusinessHome> {
  Widget _modulePage(String module){
   final data=rows(module),cols=fields[module]??[];
   return ListView(padding:const EdgeInsets.all(22),children:[
-   Text('${data.length} records',style:const TextStyle(color:Colors.black54)),
-   const SizedBox(height:4),
-   Text(module == 'Daily Orders'
-     ? 'Upload marketplace shipping-label PDFs. The software reads order details and sorts them automatically.'
-     : 'Manage your records, import a workbook or download an Excel template.',
-     style: const TextStyle(fontWeight: FontWeight.w600)),
+   if (module == 'Daily Orders')
+    Container(
+     padding: const EdgeInsets.all(20),
+     decoration: BoxDecoration(
+      gradient: const LinearGradient(
+       colors: [Color(0xFF101D3A), Color(0xFF263F78)],
+       begin: Alignment.topLeft, end: Alignment.bottomRight,
+      ),
+      borderRadius: BorderRadius.circular(18),
+     ),
+     child: Row(children: [
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+       Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(color: Colors.white.withOpacity(.13), borderRadius: BorderRadius.circular(20)),
+        child: const Text('PDF-FIRST WORKFLOW', style: TextStyle(color: Color(0xFFFFC44F), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
+       ),
+       const SizedBox(height: 10),
+       const Text('Shipping Label Manager', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+       const SizedBox(height: 5),
+       const Text('Upload a marketplace PDF. Orders, SKU quantities, brands and seller details are extracted and sorted automatically.', style: TextStyle(color: Color(0xFFD8E1F3), height: 1.4)),
+      ])),
+      const SizedBox(width: 12),
+      Container(width: 54, height: 54, decoration: BoxDecoration(color: const Color(0xFFFFC44F).withOpacity(.15), borderRadius: BorderRadius.circular(16)), child: const Icon(Icons.picture_as_pdf_rounded, color: Color(0xFFFFC44F), size: 29)),
+     ]),
+    )
+   else
+    Text('${data.length} records',style:const TextStyle(color:Colors.black54)),
    const SizedBox(height:14),
    Wrap(spacing:10,runSpacing:10,children:[
     FilledButton.icon(onPressed:()=>_addRecord(module),icon:const Icon(Icons.add),label:const Text('Add Manually')),
@@ -442,7 +464,14 @@ class _BusinessHomeState extends State<BusinessHome> {
   return Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
    Wrap(spacing:10,runSpacing:10,children:[_metric('Shipping Labels',labels.length,Icons.local_shipping, const Color(0xFF2457C5),false),_metric('SKU Lines',data.length,Icons.inventory_2, const Color(0xFF7C4DFF),false)]),
    const SizedBox(height:8),
-   Row(children:[Expanded(child:group('Platform-wise order quantity',byPlatform)),const SizedBox(width:10),Expanded(child:group('Brand-wise order quantity',byBrand))]),
+   LayoutBuilder(builder: (context, constraints) {
+    final platformCard = group('Platform-wise order quantity', byPlatform);
+    final brandCard = group('Brand-wise order quantity', byBrand);
+    if (constraints.maxWidth < 680) {
+     return Column(children: [platformCard, const SizedBox(height: 8), brandCard]);
+    }
+    return Row(children: [Expanded(child: platformCard), const SizedBox(width: 10), Expanded(child: brandCard)]);
+   }),
    const SizedBox(height:8),
    const SizedBox(height:8),
    const Text('Orders are counted from shipping-label pages only. Tax Invoice pages are read only to enrich order details and are never counted as extra orders. Multi-SKU labels are split into individual SKU lines; quantity is taken from the invoice when available.',style:TextStyle(color:Colors.black54,fontSize:12)),
