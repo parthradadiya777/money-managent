@@ -23,16 +23,16 @@ class MyntraLabelParser {
   }
 
   static String _brandFor(String sku, String invoiceText) {
-    final skuEscaped = RegExp.escape(sku.replaceAll(RegExp(r'\s+'), ''));
-    final productLine = RegExp(
-      r'\)\s*-\s*([A-Za-z][A-Za-z &.\-]{1,50}?)\s+Women\b',
+    final compactInvoice = invoiceText.replaceAll(RegExp(r'\\s+'), '');
+    final skuInInvoice = RegExp(
+      r'\\(' + RegExp.escape(sku) + r'\\)-([A-Za-z][A-Za-z&.\\-]{1,50}?)Women\\b',
       caseSensitive: false,
-    ).firstMatch(invoiceText);
-    if (productLine != null) return productLine.group(1)!.trim();
+    ).firstMatch(compactInvoice);
+    if (skuInInvoice != null) return skuInInvoice.group(1)!.trim();
     final prefix = sku.split('-').first.toUpperCase().replaceAll('&', '_');
     if (prefix == 'SA') return 'Sangria';
     if (prefix == 'AL' || prefix == 'ALN') return 'All About You';
-    if (prefix == 'H_N' || prefix == 'H_N') return 'HERE&NOW';
+    if (prefix == 'H_N') return 'HERE&NOW';
     if (prefix == 'LOOK') return 'JiproStore';
     return prefix.isEmpty ? 'Unassigned' : prefix;
   }
