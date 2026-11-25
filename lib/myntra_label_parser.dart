@@ -19,50 +19,62 @@ class MyntraLabelParser {
     };
     final month = months[parts[1].toLowerCase().substring(0, 3)];
     if (month == null) return value;
-    return '${parts[2]}-$month-${parts[0].padLeft(2, '0')}';
+    return parts[2] + '-' + month + '-' + parts[0].padLeft(2, '0');
   }
 
   static String _invoiceBlockForSku(String sku, String invoiceText) {
-    final compact = invoiceText.replaceAll(RegExp(r'\\s+'), '');
-    final current = compact.indexOf('(${sku})');
+    final compact = invoiceText.replaceAll(RegExp(r'\s+'), '');
+    final current = compact.indexOf('(' + sku + ')');
     if (current < 0) return '';
-    final nextSku = RegExp(r'\\([A-Z0-9][A-Z0-9_&-]{4,}\\)-', caseSensitive: false);
-    final next = nextSku.allMatches(compact).where((m) => m.start > current).firstOrNull;
-    return compact.substring(current, next?.start ?? compact.length);
+    final nextSku = RegExp(r'\([A-Z0-9][A-Z0-9_&-]{4,}\)-', caseSensitive: false);
+    int? nextStart;
+    for (final match in nextSku.allMatches(compact)) {
+      if (match.start > current) {
+        nextStart = match.start;
+        break;
+      }
+    }
+    return compact.substring(current, nextStart ?? compact.length);
   }
 
   static int _quantityForSku(String sku, String invoiceText) {
     final block = _invoiceBlockForSku(sku, invoiceText);
     if (block.isEmpty) return 1;
-    final match = RegExp(r'HSN:.*?(\\d+)Rs', caseSensitive: false, dotAll: true)
+    final match = RegExp(r'HSN:.*?(\d+)Rs', caseSensitive: false, dotAll: true)
         .firstMatch(block);
-    final fallback = RegExp(r'(\\d+)Rs[0-9]', caseSensitive: false).firstMatch(block);
+    final fallback = RegExp(r'(\d+)Rs[0-9]', caseSensitive: false).firstMatch(block);
     final qty = int.tryParse(match?.group(1) ?? fallback?.group(1) ?? '');
     return qty == null || qty < 1 ? 1 : qty;
   }
 
   static String _brandFor(String sku, String invoiceText) {
-    final compactInvoice = invoiceText.replaceAll(RegExp(r'\\s+'), '');
+    final compactInvoice = invoiceText.replaceAll(RegExp(r'\s+'), '');
     final skuInInvoice = RegExp(
-      r'\\(' + RegExp.escape(sku) + r'\\)-([A-Za-z][A-Za-z&.\\-]{1,50}?)Women\\b',
+      r'\(' + RegExp.escape(sku) + r'\)-([A-Za-z][A-Za-z&.-]{1,50}?)Women\b',
       caseSensitive: false,
     ).firstMatch(compactInvoice);
     if (skuInInvoice != null) return skuInInvoice.group(1)!.trim();
     final prefix = sku.split('-').first.toUpperCase().replaceAll('&', '_');
     if (prefix == 'SA') return 'Sangria';
-    if (prefix == 'AL' || prefix == 'ALN') return 'All About You';
-    if (prefix == 'H_N') return 'HERE&NOW';
+    if (prefix == 'AL' || prefix == 'ALN' || prefix == 'AL2') return 'All About You';
+    if (prefix == 'H_N' || prefix == 'HA') return 'HERE&NOW';
     if (prefix == 'LOOK') return 'JiproStore';
     return prefix.isEmpty ? 'Unassigned' : prefix;
   }
 
   static String _firmFrom(String labelText, String invoiceText) {
     final fromSeller = _first(
-      RegExp(r'Seller Details[\s\S]*?\n\s*([A-Z][A-Z0-9 &.\-]{2,})\s*\n\s*\d{2}[A-Z0-9]{13}', caseSensitive: false),
+      RegExp(
+        r'Seller Details[\s\S]*?\n\s*([A-Z][A-Z0-9 &.-]{2,})\s*\n\s*\d{2}[A-Z0-9]{13}',
+        caseSensitive: false,
+      ),
       labelText,
     );
     if (fromSeller.isNotEmpty) return fromSeller;
-    return _first(RegExp(r'Bill From:\s*([A-Z][A-Z0-9 &.\-]{2,})', caseSensitive: false), invoiceText);
+    return _first(
+      RegExp(r'Bill From:\s*([A-Z][A-Z0-9 &.-]{2,})', caseSensitive: false),
+      invoiceText,
+    );
   }
 
   static List<Map<String, dynamic>> parse(Uint8List bytes) {
@@ -83,7 +95,6 @@ class MyntraLabelParser {
             endPageIndex: pageIndex,
           ));
         } on RangeError {
-          // A malformed/blank page should not stop valid labels on other pages.
           pageTexts.add('');
         }
       }
@@ -91,13 +102,13 @@ class MyntraLabelParser {
       for (var pageIndex = 0; pageIndex < pageTexts.length; pageIndex++) {
         final labelText = pageTexts[pageIndex];
         final skuMatches = _skuPattern.allMatches(labelText).toList();
-        final lower = labelText.toLowerCase();
-        final isShippingLabel = lower.contains("buyer's name and address") &&
-            skuMatches.isNotEmpty;
-        if (!isShippingLabel) continue;
+        if (!labelText.toLowerCase().contains("buyer's name and address") ||
+            skuMatches.isEmpty) {
+          continue;
+        }
 
-        // Myntra PDFs generally place the tax invoice immediately before the
-        // shipping label. Read it for details, but count only this label page.
+        // Read the invoice immediately before the label for details only.
+        // Only the shipping-label page is counted as an order.
         final invoiceText = pageIndex > 0 ? pageTexts[pageIndex - 1] : '';
         final orderId = _first(
           RegExp(r'Order Number:\s*([0-9-]+)', caseSensitive: false),
@@ -113,7 +124,10 @@ class MyntraLabelParser {
         );
         final firm = _firmFrom(labelText, invoiceText);
         final customerBlock = _first(
-          RegExp(r"Buyer's Name And Address\s*([\s\S]*?)(?:If undelivered|Seller Details|Buyer Declaration)", caseSensitive: false),
+          RegExp(
+            r"Buyer's Name And Address\s*([\s\S]*?)(?:If undelivered|Seller Details|Buyer Declaration)",
+            caseSensitive: false,
+          ),
           labelText,
         );
         final customerLines = customerBlock
@@ -131,24 +145,17 @@ class MyntraLabelParser {
             .firstMatch(labelText)?.group(1)?.toUpperCase() ?? '';
         final courier = labelText.split(RegExp(r'\r?\n')).map((v) => v.trim())
             .firstWhere((v) => v.toLowerCase().contains('logistics'), orElse: () => '');
-        final qtyMatch = RegExp(r'\b(\d+)\s+Rs\s*[0-9,]+(?:\.[0-9]+)?', caseSensitive: false)
-            .firstMatch(invoiceText);
-        final invoiceQty = int.tryParse(qtyMatch?.group(1) ?? '') ?? 1;
-        final invoiceTotalMatch = RegExp(r'TOTAL[\s\S]{0,180}?((?:Rs\.?\s*)[0-9,]+(?:\.[0-9]+)?)', caseSensitive: false)
-            .allMatches(invoiceText).toList();
-        final grossValue = invoiceTotalMatch.isEmpty
-            ? amount
-            : invoiceTotalMatch.last.group(1)!.replaceAll(RegExp(r'Rs\.?\s*|,' , caseSensitive: false), '').trim();
         final pageNumber = pageIndex + 1;
         final labelRef = orderId.isNotEmpty
             ? orderId
-            : (skuMatches.first.group(2) ?? 'PAGE-$pageNumber').trim();
+            : (skuMatches.first.group(2) ?? 'PAGE-' + pageNumber.toString()).trim();
 
         for (final match in skuMatches) {
           final sku = (match.group(1) ?? '')
               .replaceAll(RegExp(r'\s+'), '')
               .toUpperCase();
-          final brand = _brandFor(sku, invoiceText);\n          final invoiceQty = _quantityForSku(sku, invoiceText);
+          final brand = _brandFor(sku, invoiceText);
+          final invoiceQty = _quantityForSku(sku, invoiceText);
           final shipmentRef = (match.group(2) ?? '').trim();
           final size = RegExp(r'-(XS|S|M|L|XL|XXL|3XL|4XL)$', caseSensitive: false)
               .firstMatch(sku)?.group(1)?.toUpperCase() ?? '';
@@ -162,7 +169,7 @@ class MyntraLabelParser {
             'Size': size,
             'Color': '',
             'Orders Qty': invoiceQty.toString(),
-            'Gross Order Value': grossValue,
+            'Gross Order Value': amount,
             'Delivered Qty': '',
             'Delivered Sales': '',
             'Commission / Fees': '',
@@ -176,7 +183,7 @@ class MyntraLabelParser {
             'Source PDF': 'Myntra PDF',
             'PDF Page': pageNumber.toString(),
             'Invoice No.': invoiceNo,
-            'Label ID': 'MYNTRA-$labelRef-PAGE-$pageNumber',
+            'Label ID': 'MYNTRA-' + labelRef + '-PAGE-' + pageNumber.toString(),
           });
         }
       }
