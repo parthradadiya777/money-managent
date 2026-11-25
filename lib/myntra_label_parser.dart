@@ -141,13 +141,14 @@ class MyntraLabelParser {
               .toUpperCase();
           final invoiceQty = _quantityForSku(sku, invoiceText);
           final shipmentRef = (match.group(2) ?? '').trim();
+          final resolvedOrderId = orderId.isNotEmpty ? orderId : shipmentRef;
           final size = RegExp(r'-(XS|S|M|L|XL|XXL|3XL|4XL)$', caseSensitive: false)
               .firstMatch(sku)?.group(1)?.toUpperCase() ?? '';
           output.add({
-            'Date': orderDate,
+            'Date': orderDate.isEmpty ? 'Not detected' : orderDate,
             'Platform': 'Myntra',
-            'Firm / Account': firm,
-            'Order ID': orderId,
+            'Firm / Account': firm.isEmpty ? 'Not detected' : firm,
+            'Order ID': resolvedOrderId,
             'SKU / Product': sku,
             'Brand': 'JIPROSTORE',
             'Size': size,
