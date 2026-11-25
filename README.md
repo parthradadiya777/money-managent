@@ -14,7 +14,7 @@ Flutter app for multi-marketplace orders, GST entities, returns/RTO, vendor purc
 - Login and registration UI when a cloud API URL is configured
 - Cloud sync client with batch upload, download/merge, and remote record deletion
 - Marketplace starter list: Meesho, Myntra, Flipkart, Amazon and AJIO
-- Firm starter list: JPWels, House of Ishika and Jipro Store
+- Synthetic demo firms: Demo Fashion Store, Demo Home Store and Demo Myntra Store
 
 ## Run locally
 Install the current stable Flutter SDK (Dart 3 or newer):
@@ -38,18 +38,18 @@ flutter build windows --release --dart-define=API_BASE_URL=https://YOUR-API-SERV
 ```
 
 ## Important data limitation
-The app still keeps a local Hive copy on each device. The initial authenticated API client and merge/upload sync flow are now in the codebase, but cloud sync remains inactive until a PostgreSQL database and API are deployed and the app is built with `--dart-define=API_BASE_URL=...`. Do not use it as the sole live accounting database yet: schema migrations, conflict resolution, automated backups, token hardening, and end-to-end tests must be completed before production use.
+The app keeps a local Hive copy on each device. Test builds use the separate `business_manager_test` Hive box and the free test API; they must contain synthetic/demo data only. Never enter real business, customer, vendor, GST, bank or order data in the test environment. The free test PostgreSQL database expires on 25 December 2026 and the free API may sleep when idle. Do not use this MVP as the sole live accounting database: schema migrations, robust conflict resolution/tombstones, secure token storage/rotation, backups, rate limiting and production security review are still required.
 
 ## Cloud API
-The FastAPI backend is in `backend/`. Configure `DATABASE_URL` and a strong `JWT_SECRET`, then run it with `uvicorn app.main:app --host 0.0.0.0 --port $PORT` from that folder. API documentation is available at `/docs` after deployment. The Flutter app uses `API_BASE_URL` at build time; leave it unset to run in local-only mode.
+The FastAPI backend is in `backend/`. Configure `DATABASE_URL` and a strong `JWT_SECRET`, then run it with `uvicorn app.main:app --host 0.0.0.0 --port $PORT` from that folder. API documentation is available at `/docs` after deployment. The Flutter app uses `API_BASE_URL` at build time; leave it unset to run in local-only mode. CI test builds set `APP_ENV=test` and point to `https://digitechified-bm-test-api.onrender.com`, which isolates test storage from the normal local Hive box.
 
 ## CI builds
 GitHub Actions builds the Web bundle and prepares Android and Windows scaffolding before creating APK and Windows release artifacts. Workflow: `.github/workflows/flutter-build.yml`.
 
 ## Initial business setup
-Masters includes editable examples:
-- JPWels — Meesho
-- House of Ishika — Meesho
-- Jipro Store — Myntra
+Masters includes editable synthetic examples:
+- Demo Fashion Store — Meesho
+- Demo Home Store — Meesho
+- Demo Myntra Store — Myntra
 
-Enter the actual GSTIN, state, bank details and remaining marketplace-to-firm mappings before recording live transactions.
+Use only synthetic information in test builds. Configure production firms and sensitive details only after a separately reviewed production deployment.
