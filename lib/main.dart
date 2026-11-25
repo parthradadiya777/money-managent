@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:file_picker/file_picker.dart';
@@ -222,8 +221,7 @@ class _BusinessHomeState extends State<BusinessHome> {
    sheet.appendRow(cols);
    for(final row in data){sheet.appendRow(cols.map((e)=>row[e]??'').toList());}
    final bytes=book.encode();if(bytes==null)return;
-   final path=await FilePicker.platform.saveFile(fileName:'${module.replaceAll(' ','_')}.xlsx',bytes:bytes);
-   if(path!=null&&!path.startsWith('content://'))await File(path).writeAsBytes(bytes,flush:true);
+   await FilePicker.platform.saveFile(fileName:'${module.replaceAll(' ','_')}.xlsx',bytes:bytes);
    if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Excel export ready')));
   }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Export failed: $e')));}
  }
