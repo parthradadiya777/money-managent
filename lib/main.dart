@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart';
+import 'dart:math';
+import 'cloud_sync.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,7 +28,7 @@ class BusinessManagerApp extends StatelessWidget {
     debugShowCheckedModeBanner: false,
     title: 'Digitechified Business Manager',
     theme: ThemeData(useMaterial3: true, colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2457C5)), scaffoldBackgroundColor: const Color(0xFFF5F7FB), inputDecorationTheme: const InputDecorationTheme(border: OutlineInputBorder(), filled: true, fillColor: Colors.white)),
-    home: const BusinessHome(),
+    home: const AuthGate(),
   );
 }
 
@@ -43,6 +45,127 @@ const Map<String,List<String>> fields = {
  'Masters':['Record Type','Name','GSTIN','State','Platform','Contact','Opening Balance','Notes'],
 };
 
+
+class AuthGate extends StatefulWidget {
+  const AuthGate({super.key});
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  final Box box = Hive.box('business_manager');
+  @override
+  Widget build(BuildContext context) {
+    if (!CloudSyncService.configured) return const BusinessHome();
+    final token = box.get('cloudToken') as String?;
+    if (token == null || token.isEmpty) {
+      return LoginPage(onAuthenticated: (value) async {
+        await box.put('cloudToken', value);
+        if (mounted) setState(() {});
+      });
+    }
+    return const BusinessHome();
+  }
+}
+
+class LoginPage extends StatefulWidget {
+  final Future<void> Function(String token) onAuthenticated;
+  const LoginPage({super.key, required this.onAuthenticated});
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  final email = TextEditingController();
+  final password = TextEditingController();
+  final business = TextEditingController();
+  bool register = false;
+  bool busy = false;
+  bool obscure = true;
+  String? error;
+
+  Future<void> submit() async {
+    if (email.text.trim().isEmpty || password.text.isEmpty ||
+        (register && business.text.trim().isEmpty)) {
+      setState(() => error = 'Please fill all required fields.');
+      return;
+    }
+    setState(() { busy = true; error = null; });
+    try {
+      final result = await CloudSyncService().authenticate(
+        email: email.text.trim(),
+        password: password.text,
+        businessName: business.text.trim(),
+        register: register,
+      );
+      await widget.onAuthenticated(result['access_token'] as String);
+    } catch (e) {
+      setState(() => error = e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    email.dispose(); password.dispose(); business.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    body: Center(child: SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 440),
+        child: Card(
+          color: Colors.white,
+          elevation: 1,
+          child: Padding(
+            padding: const EdgeInsets.all(28),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              const Icon(Icons.account_balance_wallet_rounded, size: 46, color: Color(0xFF2457C5)),
+              const SizedBox(height: 14),
+              const Text('DIGITECHIFIED', textAlign: TextAlign.center,
+                style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.4)),
+              const SizedBox(height: 4),
+              const Text('Business Manager', textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 24),
+              if (register) ...[
+                TextField(controller: business, decoration: const InputDecoration(labelText: 'Business / Firm Name')),
+                const SizedBox(height: 12),
+              ],
+              TextField(controller: email, keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(labelText: 'Email')),
+              const SizedBox(height: 12),
+              TextField(controller: password, obscureText: obscure,
+                decoration: InputDecoration(labelText: 'Password',
+                  helperText: register ? 'Use at least 12 characters' : null,
+                  suffixIcon: IconButton(icon: Icon(obscure ? Icons.visibility : Icons.visibility_off),
+                    onPressed: () => setState(() => obscure = !obscure)))),
+              if (error != null) ...[
+                const SizedBox(height: 12),
+                Text(error!, style: const TextStyle(color: Colors.red)),
+              ],
+              const SizedBox(height: 18),
+              FilledButton(
+                onPressed: busy ? null : submit,
+                child: Padding(padding: const EdgeInsets.all(12),
+                  child: Text(busy ? 'Please wait...' : register ? 'Create Business Account' : 'Login')),
+              ),
+              TextButton(
+                onPressed: busy ? null : () => setState(() { register = !register; error = null; }),
+                child: Text(register ? 'Already registered? Login' : 'New business? Create account'),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    )),
+  );
+}
+
 class BusinessHome extends StatefulWidget {
  const BusinessHome({super.key});
  @override State<BusinessHome> createState()=>_BusinessHomeState();
@@ -50,11 +173,74 @@ class BusinessHome extends StatefulWidget {
 class _BusinessHomeState extends State<BusinessHome> {
  final Box box=Hive.box('business_manager');
  int selected=0;
+ String? _syncMessage;
  String money(num n)=>'₹${n.toStringAsFixed(2)}';
  List<Map> rows(String key){final raw=box.get(key,defaultValue:<dynamic>[]);return (raw as List).map((e)=>Map<String,dynamic>.from(e as Map)).toList();}
  num sum(String key,String field)=>rows(key).fold<num>(0,(v,e)=>v+(num.tryParse('${e[field]??0}'.replaceAll(',',''))??0));
- Future<void> saveRows(String key,List<Map> value)async=>box.put(key,value);
+ Future<void> saveRows(String key,List<Map> value) async {
+  for (final item in value) { item['_syncId'] ??= _newSyncId(); }
+  await box.put(key,value);
+  await _pushModule(key,value);
+ }
 
+ @override
+ void initState() {
+  super.initState();
+  WidgetsBinding.instance.addPostFrameCallback((_) => _syncOnStart());
+ }
+ String _newSyncId() => '${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(1 << 32)}';
+ Future<void> _syncOnStart() async {
+  final token = box.get('cloudToken') as String?;
+  if (!CloudSyncService.configured || token == null || token.isEmpty) return;
+  final api = CloudSyncService(token: token);
+  try {
+   final remote = await api.fetchRecords();
+   for (final module in fields.keys) {
+    final local = rows(module);
+    final localIds = <String>{};
+    for (final item in local) {
+     item['_syncId'] ??= _newSyncId();
+     localIds.add('${item['_syncId']}');
+    }
+    for (final item in remote.where((r) => r['module'] == module)) {
+     final payload = Map<String, dynamic>.from(item['payload'] as Map);
+     final id = '${item['record_id']}';
+     payload['_syncId'] ??= id;
+     if (!localIds.contains(id)) local.add(payload);
+    }
+    await box.put(module, local);
+   }
+   for (final module in fields.keys) {
+    final local = rows(module);
+    final records = local.map((item) => <String, dynamic>{
+     'record_id': '${item['_syncId']}',
+     'module': module,
+     'payload': item,
+    }).toList();
+    await api.upsertRecords(records);
+   }
+   if (mounted) setState(() => _syncMessage = 'Cloud synced');
+  } catch (e) {
+   if (mounted) setState(() => _syncMessage = 'Sync pending');
+   if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text('Cloud sync issue: ${e.toString().replaceFirst('Exception: ', '')}')));
+  }
+ }
+ Future<void> _pushModule(String module, List<Map> list) async {
+  final token = box.get('cloudToken') as String?;
+  if (!CloudSyncService.configured || token == null || token.isEmpty) return;
+  try {
+   final records = list.map((item) => <String, dynamic>{
+    'record_id': '${item['_syncId']}',
+    'module': module,
+    'payload': item,
+   }).toList();
+   await CloudSyncService(token: token).upsertRecords(records);
+   if (mounted) setState(() => _syncMessage = 'Cloud synced');
+  } catch (_) {
+   if (mounted) setState(() => _syncMessage = 'Sync pending');
+  }
+ }
  @override Widget build(BuildContext context){
   final wide=MediaQuery.of(context).size.width>850;
   return Scaffold(body:Row(children:[
@@ -80,7 +266,15 @@ class _BusinessHomeState extends State<BusinessHome> {
  Widget _topBar()=>Container(height:70,padding:const EdgeInsets.symmetric(horizontal:22),color:Colors.white,child:Row(children:[
   if(MediaQuery.of(context).size.width<=850)const Icon(Icons.menu_rounded,color:Color(0xFF263B67)),
   const SizedBox(width:8),Expanded(child:Text(selected==0?'Business Overview':modules[selected],style:const TextStyle(fontSize:19,fontWeight:FontWeight.bold,color:Color(0xFF17233D)))),
-  const Chip(avatar:Icon(Icons.circle,size:9,color:Colors.green),label:Text('Local data')),const SizedBox(width:8),
+  Chip(avatar:Icon(Icons.circle,size:9,color:_syncMessage=='Cloud synced'?Colors.green:Colors.orange),
+   label:Text(_syncMessage ?? (box.get('cloudToken') != null ? 'Cloud sync' : 'Local data'))),
+  if (CloudSyncService.configured && box.get('cloudToken') != null)
+   IconButton(tooltip:'Logout', onPressed:() async {
+    await box.delete('cloudToken');
+    if (mounted) Navigator.of(context).pushAndRemoveUntil(
+     MaterialPageRoute(builder: (_) => const BusinessManagerApp()), (route) => false);
+   }, icon:const Icon(Icons.logout)),
+  const SizedBox(width:8),
   const CircleAvatar(backgroundColor:Color(0xFFE9EFFB),child:Text('P',style:TextStyle(color:Color(0xFF2457C5),fontWeight:FontWeight.bold))),
  ]));
  Widget _bottomNav()=>NavigationBar(
@@ -202,7 +396,20 @@ class _BusinessHomeState extends State<BusinessHome> {
   for(final c in controllers.values){c.dispose();}
  }
  bool _numeric(String key)=>['Qty','Value','Sales','Fees','Shipping','Deductions','Amount','GST %','Credit','Debit','Balance','Paid','Received'].any((v)=>key.toLowerCase().contains(v.toLowerCase()));
- Future<void> _deleteRecord(String module,int index)async{final list=rows(module)..removeAt(index);await saveRows(module,list);if(mounted)setState((){});}
+ Future<void> _deleteRecord(String module,int index) async {
+  final list=rows(module);
+  final removed=list.removeAt(index);
+  final id=removed['_syncId']?.toString();
+  await saveRows(module,list);
+  final token=box.get('cloudToken') as String?;
+  if(id!=null && token!=null && CloudSyncService.configured) {
+   try { await CloudSyncService(token:token).deleteRecord(id); } catch (_) {
+    if(mounted) ScaffoldMessenger.of(context).showSnackBar(
+     const SnackBar(content:Text('Record removed locally; cloud delete will need retry.')));
+   }
+  }
+  if(mounted)setState((){});
+ }
 
  String _normal(String s)=>s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'),'');
  String _canonical(String module,String header){
