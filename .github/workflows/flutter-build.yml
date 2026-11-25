@@ -33,8 +33,28 @@ jobs:
           channel: stable
       - run: rm -rf android
       - run: flutter create --platforms=android --org com.digitechified --project-name business_manager .
-      - run: sed -i 's/compileSdk = .*/compileSdk = 36/' android/app/build.gradle.kts
-      - run: grep -n 'compileSdk' android/app/build.gradle.kts
+      - name: Set Android API level 36 for every Android module
+        shell: bash
+        run: |
+          sed -i 's/compileSdk = .*/compileSdk = 36/' android/app/build.gradle.kts
+          cat >> android/build.gradle.kts <<'EOF'
+
+          // Keep all Flutter plugin Android modules aligned with the app compile SDK.
+          subprojects {
+              afterEvaluate {
+                  val androidExtension = extensions.findByName("android")
+                  if (androidExtension != null) {
+                      val setter = androidExtension.javaClass.methods.firstOrNull {
+                          (it.name == "compileSdkVersion" || it.name == "setCompileSdkVersion") &&
+                          it.parameterTypes.size == 1 &&
+                          (it.parameterTypes[0] == Int::class.javaPrimitiveType || it.parameterTypes[0] == Int::class.java)
+                      }
+                      setter?.invoke(androidExtension, 36)
+                  }
+              }
+          }
+          EOF
+          grep -n 'compileSdk' android/app/build.gradle.kts
       - run: flutter pub get
       - run: flutter build apk --release --dart-define=APP_ENV=test --dart-define=API_BASE_URL=https://digitechified-bm-test-api.onrender.com
       - uses: actions/upload-artifact@v4
