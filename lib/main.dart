@@ -5,15 +5,18 @@ import 'package:excel/excel.dart';
 import 'dart:math';
 import 'cloud_sync.dart';
 
+const bool isTestEnvironment = String.fromEnvironment('APP_ENV') == 'test';
+const String hiveBoxName = isTestEnvironment ? 'business_manager_test' : 'business_manager';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
-  final dataBox = await Hive.openBox('business_manager');
+  final dataBox = await Hive.openBox(hiveBoxName);
   if (dataBox.get('Masters') == null) {
     await dataBox.put('Masters', [
-      {'Record Type':'Firm','Name':'JPWels','GSTIN':'','State':'Gujarat','Platform':'Meesho','Notes':'Initial account mapping'},
-      {'Record Type':'Firm','Name':'House of Ishika','GSTIN':'','State':'Gujarat','Platform':'Meesho','Notes':'Initial account mapping'},
-      {'Record Type':'Firm','Name':'Jipro Store','GSTIN':'','State':'Gujarat','Platform':'Myntra','Notes':'Initial account mapping'},
+      {'Record Type':'Firm','Name':'Demo Fashion Store','GSTIN':'','State':'Gujarat','Platform':'Meesho','Notes':'Initial account mapping'},
+      {'Record Type':'Firm','Name':'Demo Home Store','GSTIN':'','State':'Gujarat','Platform':'Meesho','Notes':'Initial account mapping'},
+      {'Record Type':'Firm','Name':'Demo Myntra Store','GSTIN':'','State':'Gujarat','Platform':'Myntra','Notes':'Initial account mapping'},
       {'Record Type':'Platform','Name':'Meesho'}, {'Record Type':'Platform','Name':'Myntra'},
       {'Record Type':'Platform','Name':'Flipkart'}, {'Record Type':'Platform','Name':'Amazon'}, {'Record Type':'Platform','Name':'AJIO'},
     ]);
@@ -53,7 +56,7 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
-  final Box box = Hive.box('business_manager');
+  final Box box = Hive.box(hiveBoxName);
   @override
   Widget build(BuildContext context) {
     if (!CloudSyncService.configured) return const BusinessHome();
