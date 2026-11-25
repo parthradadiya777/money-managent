@@ -1,11 +1,11 @@
 {
-    "name": "moneymanagement",
-    "short_name": "moneymanagement",
+    "name": "Digitechified Manager",
+    "short_name": "Digitechified Manager",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Multi-marketplace business management for orders, GST, vendors, settlements and banking.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
