@@ -14,15 +14,15 @@ class MyntraLabelParser {
     value = value.trim();
     if (value.isEmpty) return '';
     final numeric = RegExp(r'^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$').firstMatch(value);
-    if (numeric != null) return '\${numeric.group(3)}-\${numeric.group(2)!.padLeft(2, '0')}-\${numeric.group(1)!.padLeft(2, '0')}';
+    if (numeric != null) return '${numeric.group(3)}-${numeric.group(2)!.padLeft(2, '0')}-${numeric.group(1)!.padLeft(2, '0')}';
     final iso = RegExp(r'^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$').firstMatch(value);
-    if (iso != null) return '\${iso.group(1)}-\${iso.group(2)!.padLeft(2, '0')}-\${iso.group(3)!.padLeft(2, '0')}';
+    if (iso != null) return '${iso.group(1)}-${iso.group(2)!.padLeft(2, '0')}-${iso.group(3)!.padLeft(2, '0')}';
     final parts = value.split(RegExp(r'\s+'));
     if (parts.length != 3) return value;
     const months = {'jan':'01','feb':'02','mar':'03','apr':'04','may':'05','jun':'06','jul':'07','aug':'08','sep':'09','oct':'10','nov':'11','dec':'12'};
     final month = months[parts[1].toLowerCase().substring(0, 3)];
     if (month == null) return value;
-    return '\${parts[2]}-$month-\${parts[0].padLeft(2, '0')}';
+    return '${parts[2]}-$month-${parts[0].padLeft(2, '0')}';
   }
 
   static String _invoiceBlockForSku(String sku, String invoiceText) {
@@ -138,7 +138,7 @@ class MyntraLabelParser {
             'Source PDF': 'Myntra PDF',
             'PDF Page': pageNumber.toString(),
             'Invoice No.': invoiceNo,
-            'Label ID': 'MYNTRA-\${resolvedOrderId.isEmpty ? shipmentRef : resolvedOrderId}-PAGE-\$pageNumber',
+            'Label ID': 'MYNTRA-${resolvedOrderId.isEmpty ? shipmentRef : resolvedOrderId}-PAGE-\$pageNumber',
           });
         }
       }
