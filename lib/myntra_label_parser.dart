@@ -12,7 +12,7 @@ class MyntraLabelParser {
           endPageIndex: i,
         );
         final skuMatches = RegExp(
-          r'\[\s*([A-Z0-9][A-Z0-9_-]*)\s*\*\s*([^\]]+)\]',
+          r'\[\s*([A-Z0-9][A-Z0-9_ -]*?)\s*\*\s*([^\]]+)\]',
           caseSensitive: false,
         ).allMatches(text).toList();
         // Myntra PDFs contain a Tax Invoice page followed by its shipping
