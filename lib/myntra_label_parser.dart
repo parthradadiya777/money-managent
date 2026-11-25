@@ -90,9 +90,12 @@ class MyntraLabelParser {
       final pageTexts = <String>[];
       for (var pageIndex = 0; pageIndex < pageCount; pageIndex++) {
         try {
+          // Syncfusion's endPageIndex is an exclusive boundary. Passing
+          // pageIndex for the first page creates an empty range (0..0) and
+          // throws RangeError: max was 0. Use the next page as the boundary.
           pageTexts.add(extractor.extractText(
             startPageIndex: pageIndex,
-            endPageIndex: pageIndex,
+            endPageIndex: pageIndex + 1,
           ));
         } on RangeError {
           pageTexts.add('');
