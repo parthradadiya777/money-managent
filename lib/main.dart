@@ -47,7 +47,7 @@ const platforms = ['Meesho', 'Myntra', 'Flipkart', 'Amazon', 'AJIO'];
 const modules = ['Dashboard','Daily Orders','Returns & RTO','Purchases','Vendor Payments','Settlements','Bank Transactions','Expenses','Masters'];
 const Map<String,List<String>> fields = {
  'Daily Orders':['Date','Platform','Firm / Account','Order ID','SKU / Product','Brand','Size','Color','Orders Qty','Gross Order Value','Delivered Qty','Delivered Sales','Commission / Fees','Shipping Fees','Other Deductions','Courier','AWB / Tracking No.','Customer','Pincode','Source PDF','PDF Page'],
- 'Returns & RTO':['Date','Platform','Firm / Account','Order ID','SKU / Product','Type','Qty','Refund / Loss Amount','Return Shipping','Reason','Status'],
+ 'Returns & RTO':['Date','RTO / Return','Details'],
  'Purchases':['Purchase Date','Firm / GST Entity','Vendor Name','Invoice No.','SKU / Product','Qty','Taxable Value','GST %','GST Amount','Invoice Total','Paid Amount','Balance Due'],
  'Vendor Payments':['Payment Date','Firm Name','Vendor Name','Payment Mode','Amount Paid','Notes'],
  'Settlements':['Settlement Date','Platform','Firm / Account','Settlement ID','Period From','Period To','Gross Sales','Refunds / RTO','Fees / Deductions','Net Payable','Bank Received','Difference','Bank Reference'],
@@ -654,7 +654,7 @@ class _BusinessHomeState extends State<BusinessHome> {
   if (module!='Vendor Payments' && (normalized.contains('firm') || normalized.contains('account') || normalized.contains('gst entity'))) {
     return rows('Masters').where((r) => '${r['Record Type']}'.toLowerCase() == 'firm').map((r) => '${r['Name']}'.trim()).where((v) => v.isNotEmpty).toSet().toList();
   }
-  if (normalized == 'type') return ['Return', 'RTO'];
+  if (normalized == 'type' || normalized == 'rto / return') return ['Return', 'RTO'];
   if (normalized == 'status') return ['Pending', 'Completed', 'On Hold', 'Cancelled'];
   if (normalized.contains('payment mode')) return ['Bank Transfer', 'UPI', 'Cash', 'Cheque', 'Credit', 'Other'];
   if (normalized == 'record type') return ['Firm', 'Platform', 'Vendor', 'Bank Account', 'Expense Category'];
@@ -666,7 +666,7 @@ class _BusinessHomeState extends State<BusinessHome> {
   return const [];
  }
  Widget _formField(String module, String field, TextEditingController controller) {
-  if((module=='Vendor Payments' && field=='Payment Date') || (module=='Expenses' && field=='Date')){
+  if((module=='Vendor Payments' && field=='Payment Date') || ((module=='Expenses' || module=='Returns & RTO') && field=='Date')){
    DateTime? selectedDate;
    try{selectedDate=DateTime.tryParse(controller.text);}catch(_){}
    return Padding(padding:const EdgeInsets.only(bottom:12),child:InkWell(
@@ -700,7 +700,7 @@ class _BusinessHomeState extends State<BusinessHome> {
    ), keyboardType: _numeric(field) ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text),
   ]);
  }
- bool _numeric(String key)=>['Qty','Value','Sales','Fees','Shipping','Deductions','Amount','Expense','GST %','Credit','Debit','Balance','Paid','Received'].any((v)=>key.toLowerCase().contains(v.toLowerCase()));
+ bool _numeric(String key)=>['Qty','Value','Sales','Fees','Shipping','Deductions','Amount','Expense','Details','GST %','Credit','Debit','Balance','Paid','Received'].any((v)=>key.toLowerCase().contains(v.toLowerCase()));
  Future<void> _editRecord(String module,int index) async {
   final list=rows(module);
   if(index<0||index>=list.length)return;
