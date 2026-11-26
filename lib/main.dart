@@ -789,9 +789,9 @@ class _BusinessHomeState extends State<BusinessHome> {
   if(ok==true){
    final updated=<String,dynamic>{...original,for(final e in controllers.entries)e.key:e.value.text.trim()};
    if(module=='Vendor Payments'){
-    final opening=num.tryParse('\u0024{updated['Opening Balance']??0}'.replaceAll(',',''))??0;
-    final added=num.tryParse('\u0024{updated['New Amount']??0}'.replaceAll(',',''))??0;
-    final paid=num.tryParse('\u0024{updated['Amount Paid']??0}'.replaceAll(',',''))??0;
+    final opening=num.tryParse("${updated['Opening Balance']??0}".replaceAll(',',''))??0;
+    final added=num.tryParse("${updated['New Amount']??0}".replaceAll(',',''))??0;
+    final paid=num.tryParse("${updated['Amount Paid']??0}".replaceAll(',',''))??0;
     updated['Closing Balance']=(opening+added-paid).toStringAsFixed(2);
     updated.remove('Pending Amount');
    }
