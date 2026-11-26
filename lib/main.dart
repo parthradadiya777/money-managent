@@ -44,7 +44,7 @@ class BusinessManagerApp extends StatelessWidget {
 }
 
 const platforms = ['Meesho', 'Myntra', 'Flipkart', 'Amazon', 'AJIO'];
-const modules = ['Dashboard','Daily Orders','Returns & RTO','Purchases','Vendor Payments','Settlements','Bank Transactions','Expenses','Masters'];
+const modules = ['Dashboard','Daily Orders','Returns & RTO','Vendor Payments','Bank Received','Expenses','Masters'];
 const Map<String,List<String>> fields = {
  'Daily Orders':['Date','Platform','Firm / Account','Order ID','SKU / Product','Brand','Size','Color','Orders Qty','Gross Order Value','Delivered Qty','Delivered Sales','Commission / Fees','Shipping Fees','Other Deductions','Courier','AWB / Tracking No.','Customer','Pincode','Source PDF','PDF Page'],
  'Returns & RTO':['Date','RTO / Return','Details'],
@@ -285,7 +285,7 @@ class _BusinessHomeState extends State<BusinessHome> {
   ])),
   const Divider(color:Color(0xFF333333)),
   Expanded(child:ListView.builder(itemCount:modules.length,itemBuilder:(c,i){
-   final icons=[Icons.dashboard_rounded,Icons.shopping_bag,Icons.assignment_return,Icons.inventory_2,Icons.payments,Icons.account_balance,Icons.account_balance_wallet,Icons.receipt_long,Icons.settings];
+   final icons=[Icons.dashboard_rounded,Icons.shopping_bag,Icons.assignment_return,Icons.payments,Icons.account_balance,Icons.receipt_long,Icons.settings];
    final active=selected==i;
    return ListTile(dense:true,selected:active,selectedTileColor:const Color(0xFF292313),leading:Icon(icons[i],color:active?const Color(0xFFFFC84D):const Color(0xFFB9B9B9),size:19),
     title:Text(modules[i],style:TextStyle(color:active?Colors.white:const Color(0xFFB9C7E5),fontSize:13,fontWeight:active?FontWeight.w600:FontWeight.normal)),onTap:()=>setState(()=>selected=i));
@@ -309,7 +309,7 @@ class _BusinessHomeState extends State<BusinessHome> {
   const CircleAvatar(backgroundColor:Color(0xFFE9EFFB),child:Text('P',style:TextStyle(color:Color(0xFFD6A52A),fontWeight:FontWeight.bold))),
  ]));
  Widget _bottomNav()=>NavigationBar(
-  selectedIndex:selected==0?0:selected==1?1:selected==3?2:selected==6?3:4,
+  selectedIndex:selected==0?0:selected==1?1:selected==4?3:4,
   onDestinationSelected:(i){
    if(i==0){setState(()=>selected=0);}
    else if(i==1){setState(()=>selected=1);}
@@ -320,13 +320,13 @@ class _BusinessHomeState extends State<BusinessHome> {
   destinations:const[
    NavigationDestination(icon:Icon(Icons.dashboard),label:'Home'),
    NavigationDestination(icon:Icon(Icons.shopping_bag),label:'Orders'),
-   NavigationDestination(icon:Icon(Icons.inventory),label:'Purchase'),
-   NavigationDestination(icon:Icon(Icons.account_balance),label:'Bank'),
+   NavigationDestination(icon:Icon(Icons.account_balance),label:'Bank Received'),
+   
    NavigationDestination(icon:Icon(Icons.more_horiz),label:'More'),
   ],
  );
  Future<void> _showMoreModules()async{
-  final options=modules.asMap().entries.where((e)=>e.key!=0&&e.key!=1&&e.key!=3&&e.key!=6).toList();
+  final options=modules.asMap().entries.where((e)=>e.key!=0&&e.key!=1&&e.key!=4).toList();
   final choice=await showModalBottomSheet<int>(context:context,builder:(c)=>SafeArea(child:ListView(shrinkWrap:true,children:[
    const ListTile(title:Text('More sections',style:TextStyle(fontWeight:FontWeight.bold))),
    ...options.map((e)=>ListTile(leading:const Icon(Icons.folder_open),title:Text(e.value),onTap:()=>Navigator.pop(c,e.key))),
@@ -411,7 +411,7 @@ class _BusinessHomeState extends State<BusinessHome> {
    const SizedBox(height:14),
    Wrap(spacing:10,runSpacing:10,children:[
     FilledButton.icon(onPressed:()=>_addRecord(module),icon:const Icon(Icons.add),label:const Text('Add Manually')),
-    if(!isDaily&&module!='Vendor Payments'&&module!='Expenses'&&module!='Returns & RTO')...[
+    if(!isDaily&&module!='Vendor Payments'&&module!='Expenses'&&module!='Returns & RTO'&&module!='Bank Received')...[
      OutlinedButton.icon(onPressed:()=>_importExcel(module),icon:const Icon(Icons.file_upload_outlined),label:const Text('Import Excel')),
      OutlinedButton.icon(onPressed:()=>_exportExcel(module),icon:const Icon(Icons.file_download_outlined),label:const Text('Export Excel')),
     ],
@@ -613,7 +613,7 @@ class _BusinessHomeState extends State<BusinessHome> {
  Future<void> _quickAdd()async{
   final choice=await showModalBottomSheet<String>(context:context,builder:(c)=>SafeArea(child:Column(mainAxisSize:MainAxisSize.min,children:[
    const ListTile(title:Text('Quick Entry',style:TextStyle(fontWeight:FontWeight.bold))),
-   ...['Daily Orders','Purchases','Returns & RTO','Settlements','Bank Transactions','Expenses'].map((v)=>ListTile(title:Text(v),leading:const Icon(Icons.add_circle_outline),onTap:()=>Navigator.pop(c,v))),
+   ...['Daily Orders','Returns & RTO','Bank Received','Expenses'].map((v)=>ListTile(title:Text(v),leading:const Icon(Icons.add_circle_outline),onTap:()=>Navigator.pop(c,v))),
   ])));
   if(choice!=null)_addRecord(choice);
  }
@@ -666,7 +666,7 @@ class _BusinessHomeState extends State<BusinessHome> {
   return const [];
  }
  Widget _formField(String module, String field, TextEditingController controller) {
-  if((module=='Vendor Payments' && field=='Payment Date') || ((module=='Expenses' || module=='Returns & RTO') && field=='Date')){
+  if((module=='Vendor Payments' && field=='Payment Date') || ((module=='Expenses' || module=='Returns & RTO' || module=='Bank Received') && field=='Date')){
    DateTime? selectedDate;
    try{selectedDate=DateTime.tryParse(controller.text);}catch(_){}
    return Padding(padding:const EdgeInsets.only(bottom:12),child:InkWell(
