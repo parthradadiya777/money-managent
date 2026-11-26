@@ -49,7 +49,7 @@ const Map<String,List<String>> fields = {
  'Daily Orders':['Date','Platform','Firm / Account','Order ID','SKU / Product','Brand','Size','Color','Orders Qty','Gross Order Value','Delivered Qty','Delivered Sales','Commission / Fees','Shipping Fees','Other Deductions','Courier','AWB / Tracking No.','Customer','Pincode','Source PDF','PDF Page'],
  'Returns & RTO':['Date','RTO / Return','Details'],
  'Vendor Payments':['Payment Date','Firm Name','Vendor Name','Payment Mode','Amount Paid','Notes'],
- 'Bank Received':['Date','Platform','Firm / Account','Bank Account','Settlement ID','Description','Type','Category','Period From','Period To','Gross Sales','Refunds / RTO','Fees / Deductions','Net Payable','Bank Received','Difference','Bank Reference','Reference / UTR','Credit','Debit'],
+ 'Bank Received':['Date','Platform','Amount','Details','Brand'],
  'Expenses':['Date','Expense','Details','Payment Mode'],
  'Masters':['Record Type','Name','GSTIN','State','Platform','Contact','Opening Balance','Notes'],
 };
@@ -639,7 +639,7 @@ class _BusinessHomeState extends State<BusinessHome> {
   final ok=await showDialog<bool>(context:context,builder:(ctx)=>Dialog(
    backgroundColor:const Color(0xFFF9F7F1),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(24)),
    child:SizedBox(width:MediaQuery.of(ctx).size.width*.9,height:MediaQuery.of(ctx).size.height*.78,child:Padding(padding:const EdgeInsets.all(22),child:Column(mainAxisSize:MainAxisSize.max,crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-    Row(children:[Container(width:44,height:44,decoration:BoxDecoration(color:const Color(0xFF111111),borderRadius:BorderRadius.circular(13)),child:const Icon(Icons.edit_note_rounded,color:Color(0xFFFFC84D),size:26)),const SizedBox(width:12),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('Add $module',style:const TextStyle(fontSize:19,fontWeight:FontWeight.bold)),const Text('Enter order details below',style:TextStyle(color:Colors.black54,fontSize:12))]))]),
+    Row(children:[Container(width:44,height:44,decoration:BoxDecoration(color:const Color(0xFF111111),borderRadius:BorderRadius.circular(13)),child:const Icon(Icons.edit_note_rounded,color:Color(0xFFFFC84D),size:26)),const SizedBox(width:12),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('Add $module',style:const TextStyle(fontSize:19,fontWeight:FontWeight.bold)),const Text(module=='Bank Received'?'Record marketplace bank receipt':'Enter $module details below',style:TextStyle(color:Colors.black54,fontSize:12))]))]),
     const SizedBox(height:16),
     Expanded(child:SingleChildScrollView(child:Column(children:controllers.entries.map((e)=>Padding(padding:const EdgeInsets.only(bottom:12),child:_formField(module,e.key,e.value))).toList()))),
     const SizedBox(height:10),
@@ -713,7 +713,7 @@ class _BusinessHomeState extends State<BusinessHome> {
    ), keyboardType: _numeric(field) ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text),
   ]);
  }
- bool _numeric(String key)=>['Qty','Value','Sales','Fees','Shipping','Deductions','Amount','Expense','Details','GST %','Credit','Debit','Balance','Paid','Received'].any((v)=>key.toLowerCase().contains(v.toLowerCase()));
+ bool _numeric(String key)=>['Qty','Value','Sales','Fees','Shipping','Deductions','Amount','Expense','GST %','Credit','Debit','Balance','Paid','Received'].any((v)=>key.toLowerCase().contains(v.toLowerCase()));
  Future<void> _editRecord(String module,int index) async {
   final list=rows(module);
   if(index<0||index>=list.length)return;
