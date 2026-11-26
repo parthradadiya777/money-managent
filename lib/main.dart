@@ -334,7 +334,7 @@ class _BusinessHomeState extends State<BusinessHome> {
   final returnRows=rows('Returns & RTO');
   final returnQty=returnRows.where((e)=>'${e['RTO / Return']}'.toLowerCase()=='return').length;
   final rto=returnRows.where((e)=>'${e['RTO / Return']}'.toLowerCase()=='rto').length;
-  final received=sum('Bank Received','Bank Received')+sum('Bank Received','Credit');
+  final received=sum('Bank Received','Amount')+sum('Bank Received','Bank Received')+sum('Bank Received','Credit');
   final bank=(num.tryParse('${box.get('openingBank',defaultValue:0)}')??0)+sum('Bank Received','Credit')-sum('Bank Received','Debit');
   return ListView(padding:const EdgeInsets.all(22),children:[
    Row(children:[const Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
