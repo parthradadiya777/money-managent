@@ -806,7 +806,7 @@ class _BusinessHomeState extends State<BusinessHome> {
     final now=DateTime.now();
     final stamp='\${now.year.toString().padLeft(4,'0')}-\${now.month.toString().padLeft(2,'0')}-\${now.day.toString().padLeft(2,'0')}';
     final history=(updated['_paymentHistory']??'').toString();
-    updated['_paymentHistory']=[history,'₹\${paid.toStringAsFixed(2)} • $stamp\${noteController.text.trim().isEmpty?'':' • \${noteController.text.trim()}'}'].where((v)=>v.isNotEmpty).join('\\\\n');
+    updated['_paymentHistory']=[history,'₹\${paid.toStringAsFixed(2)} • $stamp\${noteController.text.trim().isEmpty?'':' • \${noteController.text.trim()}'}'].where((v)=>v.isNotEmpty).join('\\n');
     list[index]=updated;
     await saveRows('Vendor Payments',list);
     if(mounted){setState((){});ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Payment saved. Remaining pending: ₹\${(pending-paid).toStringAsFixed(2)}')));}
