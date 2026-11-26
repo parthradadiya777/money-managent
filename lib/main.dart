@@ -700,7 +700,7 @@ class _BusinessHomeState extends State<BusinessHome> {
    ), keyboardType: _numeric(field) ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text),
   ]);
  }
- bool _numeric(String key)=>['Qty','Value','Sales','Fees','Shipping','Deductions','Amount','GST %','Credit','Debit','Balance','Paid','Received'].any((v)=>key.toLowerCase().contains(v.toLowerCase()));
+ bool _numeric(String key)=>['Qty','Value','Sales','Fees','Shipping','Deductions','Amount','Expense','GST %','Credit','Debit','Balance','Paid','Received'].any((v)=>key.toLowerCase().contains(v.toLowerCase()));
  Future<void> _editRecord(String module,int index) async {
   final list=rows(module);
   if(index<0||index>=list.length)return;
