@@ -806,17 +806,17 @@ class _BusinessHomeState extends State<BusinessHome> {
   final list=rows('Vendor Payments');
   if(index<0||index>=list.length)return;
   final row=list[index];
-  final opening=num.tryParse('\u0024{row['Opening Balance']??0}'.replaceAll(',',''))??0;
+  final opening=num.tryParse("${row['Opening Balance']??0}".replaceAll(',',''))??0;
   final added=num.tryParse("${row['New Amount']??0}".replaceAll(',',''))??0;
   final paidBefore=num.tryParse("${row['Amount Paid']??0}".replaceAll(',',''))??0;
   final pending=num.tryParse("${row['Closing Balance']??row['Pending Amount']??(opening+added-paidBefore)}".replaceAll(',',''))??0;
   final amountController=TextEditingController();
   final noteController=TextEditingController();
   final ok=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(
-   title:Text('Record payment • \u0024{row['Vendor Name']??'Vendor'}'),
    title:Text("Record payment • ${row['Vendor Name']??'Vendor'}"),
-    Align(alignment:Alignment.centerLeft,child:Text('Current pending: ₹\u0024{pending.toStringAsFixed(2)}',style:const TextStyle(fontWeight:FontWeight.bold,color:Color(0xFF8A6818)))),
+   content:Column(mainAxisSize:MainAxisSize.min,children:[
     Align(alignment:Alignment.centerLeft,child:Text('Current pending: ₹${pending.toStringAsFixed(2)}',style:const TextStyle(fontWeight:FontWeight.bold,color:Color(0xFF8A6818)))),
+    const SizedBox(height:12),
     TextField(controller:amountController,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'Payment amount',prefixText:'₹ ')),
     const SizedBox(height:10),
     TextField(controller:noteController,decoration:const InputDecoration(labelText:'Payment note (optional)')),
@@ -834,20 +834,21 @@ class _BusinessHomeState extends State<BusinessHome> {
     if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Payment cannot be greater than pending amount.')));
    }else{
     final updated={...row};
+    final totalPaid=paidBefore+paidNow;
+    final now=DateTime.now();
     final stamp="${now.year.toString().padLeft(4,'0')}-${now.month.toString().padLeft(2,'0')}-${now.day.toString().padLeft(2,'0')}";
+    final history=(updated['_paymentHistory']??'').toString();
     updated['Amount Paid']=totalPaid.toStringAsFixed(2);
     updated['Closing Balance']=(pending-paidNow).toStringAsFixed(2);
+    updated.remove('Pending Amount');
     updated['_paymentHistory']=[history,"₹${paidNow.toStringAsFixed(2)} • $stamp${noteController.text.trim().isEmpty?'':' • ${noteController.text.trim()}'}"].where((v)=>v.isNotEmpty).join('\\n');
-    final now=DateTime.now();
-    final stamp='\u0024{now.year.toString().padLeft(4,'0')}-\u0024{now.month.toString().padLeft(2,'0')}-\u0024{now.day.toString().padLeft(2,'0')}';
-    if(mounted){setState((){});ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Payment saved. Remaining pending: ₹${(pending-paidNow).toStringAsFixed(2)}')));}
-    updated['_paymentHistory']=[history,'₹\u0024{paidNow.toStringAsFixed(2)} • $stamp\u0024{noteController.text.trim().isEmpty?'':' • \u0024{noteController.text.trim()}'}'].where((v)=>v.isNotEmpty).join('\\n');
     list[index]=updated;
     await saveRows('Vendor Payments',list);
-    if(mounted){setState((){});ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Payment saved. Remaining pending: ₹\u0024{(pending-paidNow).toStringAsFixed(2)}')));}
+    if(mounted){setState((){});ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Payment saved. Remaining pending: ₹${(pending-paidNow).toStringAsFixed(2)}')));}
    }
   }
-  amountController.dispose();noteController.dispose();
+  amountController.dispose();
+  noteController.dispose();
  }
 
  Future<void> _deleteRecord(String module,int index) async {
