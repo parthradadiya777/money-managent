@@ -48,10 +48,8 @@ const modules = ['Dashboard','Daily Orders','Returns & RTO','Vendor Payments','B
 const Map<String,List<String>> fields = {
  'Daily Orders':['Date','Platform','Firm / Account','Order ID','SKU / Product','Brand','Size','Color','Orders Qty','Gross Order Value','Delivered Qty','Delivered Sales','Commission / Fees','Shipping Fees','Other Deductions','Courier','AWB / Tracking No.','Customer','Pincode','Source PDF','PDF Page'],
  'Returns & RTO':['Date','RTO / Return','Details'],
- 'Purchases':['Purchase Date','Firm / GST Entity','Vendor Name','Invoice No.','SKU / Product','Qty','Taxable Value','GST %','GST Amount','Invoice Total','Paid Amount','Balance Due'],
  'Vendor Payments':['Payment Date','Firm Name','Vendor Name','Payment Mode','Amount Paid','Notes'],
- 'Settlements':['Settlement Date','Platform','Firm / Account','Settlement ID','Period From','Period To','Gross Sales','Refunds / RTO','Fees / Deductions','Net Payable','Bank Received','Difference','Bank Reference'],
- 'Bank Transactions':['Date','Bank Account','Firm / GST Entity','Description','Type','Category','Reference / UTR','Credit','Debit'],
+ 'Bank Received':['Date','Platform','Firm / Account','Bank Account','Settlement ID','Description','Type','Category','Period From','Period To','Gross Sales','Refunds / RTO','Fees / Deductions','Net Payable','Bank Received','Difference','Bank Reference','Reference / UTR','Credit','Debit'],
  'Expenses':['Date','Expense','Details','Payment Mode'],
  'Masters':['Record Type','Name','GSTIN','State','Platform','Contact','Opening Balance','Notes'],
 };
@@ -309,19 +307,17 @@ class _BusinessHomeState extends State<BusinessHome> {
   const CircleAvatar(backgroundColor:Color(0xFFE9EFFB),child:Text('P',style:TextStyle(color:Color(0xFFD6A52A),fontWeight:FontWeight.bold))),
  ]));
  Widget _bottomNav()=>NavigationBar(
-  selectedIndex:selected==0?0:selected==1?1:selected==4?3:4,
+  selectedIndex:selected==0?0:selected==1?1:selected==4?2:3,
   onDestinationSelected:(i){
    if(i==0){setState(()=>selected=0);}
    else if(i==1){setState(()=>selected=1);}
-   else if(i==2){setState(()=>selected=3);}
-   else if(i==3){setState(()=>selected=6);}
+   else if(i==2){setState(()=>selected=4);}
+   else if(i==3){_showMoreModules();}
    else {_showMoreModules();}
   },
   destinations:const[
    NavigationDestination(icon:Icon(Icons.dashboard),label:'Home'),
    NavigationDestination(icon:Icon(Icons.shopping_bag),label:'Orders'),
-   NavigationDestination(icon:Icon(Icons.account_balance),label:'Bank Received'),
-   
    NavigationDestination(icon:Icon(Icons.more_horiz),label:'More'),
   ],
  );
@@ -335,10 +331,11 @@ class _BusinessHomeState extends State<BusinessHome> {
  }
  Widget _dashboard(){
   final orderQty=sum('Daily Orders','Orders Qty'),sales=sum('Daily Orders','Delivered Sales'),delivered=sum('Daily Orders','Delivered Qty');
-  final returnQty=rows('Returns & RTO').where((e)=>'${e['Type']}'.toLowerCase()=='return').fold<num>(0,(v,e)=>v+(num.tryParse('${e['Qty']??0}')??0));
-  final rto=rows('Returns & RTO').where((e)=>'${e['Type']}'.toLowerCase()=='rto').fold<num>(0,(v,e)=>v+(num.tryParse('${e['Qty']??0}')??0));
-  final received=sum('Settlements','Bank Received'),purchases=sum('Purchases','Invoice Total');
-  final bank=(num.tryParse('${box.get('openingBank',defaultValue:0)}')??0)+sum('Bank Transactions','Credit')-sum('Bank Transactions','Debit');
+  final returnRows=rows('Returns & RTO');
+  final returnQty=returnRows.where((e)=>'${e['RTO / Return']}'.toLowerCase()=='return').length;
+  final rto=returnRows.where((e)=>'${e['RTO / Return']}'.toLowerCase()=='rto').length;
+  final received=sum('Bank Received','Bank Received')+sum('Bank Received','Credit');
+  final bank=(num.tryParse('${box.get('openingBank',defaultValue:0)}')??0)+sum('Bank Received','Credit')-sum('Bank Received','Debit');
   return ListView(padding:const EdgeInsets.all(22),children:[
    Row(children:[const Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
     Text('Good business starts with clear numbers.',style:TextStyle(fontSize:20,fontWeight:FontWeight.bold,color:Color(0xFF17233D))),
@@ -355,8 +352,7 @@ class _BusinessHomeState extends State<BusinessHome> {
      _metric('Returns',returnQty,Icons.assignment_return,const Color(0xFFD65A5A),false),
      _metric('RTO',rto,Icons.undo,const Color(0xFFB76A3C),false),
      _metric('Marketplace Received',received,Icons.payments,const Color(0xFF16865B),true),
-     _metric('Purchases',purchases,Icons.inventory_2,const Color(0xFF5D6C85),true),
-    ];
+      ];
     return GridView.count(crossAxisCount:count,shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),childAspectRatio:count==1?3.4:2.1,crossAxisSpacing:12,mainAxisSpacing:12,children:cards);
    }),
    const SizedBox(height:24),const Text('Marketplace performance',style:TextStyle(fontSize:17,fontWeight:FontWeight.bold)),const SizedBox(height:10),
