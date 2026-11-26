@@ -336,7 +336,7 @@ class _BusinessHomeState extends State<BusinessHome> {
   final rtoQty=returnRows.where((e)=>'${e['RTO / Return']??''}'.toLowerCase()=='rto').fold<num>(0,(v,e)=>v+(num.tryParse('${e['Details']??0}')??0));
   final vendorRows=rows('Vendor Payments');
   final pendingVendor=vendorRows.fold<num>(0,(v,e){
-   for(final key in ['Pending Amount','Amount Due','Balance Due','Outstanding','Pending','Amount Paid']){
+   for(final key in ['Closing Balance','Pending Amount','Amount Due','Balance Due','Outstanding','Pending']){
     final n=num.tryParse('${e[key]??''}'.replaceAll(',',''));
     if(n!=null&&n>0)return v+n;
    }
@@ -781,10 +781,14 @@ class _BusinessHomeState extends State<BusinessHome> {
    ],
   ));
   if(ok==true){
-   final updated=<String,dynamic>{
-    for(final e in controllers.entries)e.key:e.value.text.trim(),
-    if(original['_syncId']!=null)'_syncId':original['_syncId'],
-   };
+   final updated=<String,dynamic>{...original,for(final e in controllers.entries)e.key:e.value.text.trim()};
+   if(module=='Vendor Payments'){
+    final opening=num.tryParse('\u0024{updated['Opening Balance']??0}'.replaceAll(',',''))??0;
+    final added=num.tryParse('\u0024{updated['New Amount']??0}'.replaceAll(',',''))??0;
+    final paid=num.tryParse('\u0024{updated['Amount Paid']??0}'.replaceAll(',',''))??0;
+    updated['Closing Balance']=(opening+added-paid).toStringAsFixed(2);
+    updated.remove('Pending Amount');
+   }
    list[index]=updated;
    await saveRows(module,list);
    if(mounted)setState((){});
