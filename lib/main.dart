@@ -307,7 +307,7 @@ class _BusinessHomeState extends State<BusinessHome> {
   const CircleAvatar(backgroundColor:Color(0xFFE9EFFB),child:Text('P',style:TextStyle(color:Color(0xFFD6A52A),fontWeight:FontWeight.bold))),
  ]));
  Widget _bottomNav()=>NavigationBar(
-  selectedIndex:selected==0?0:selected==1?1:selected==4?2:3,
+  selectedIndex:selected==0?0:selected==1?1:2,
   onDestinationSelected:(i){
    if(i==0){setState(()=>selected=0);}
    else if(i==1){setState(()=>selected=1);}
@@ -362,10 +362,27 @@ class _BusinessHomeState extends State<BusinessHome> {
     final value=list.fold<num>(0,(v,e)=>v+(num.tryParse('${e['Delivered Sales']??0}')??0));
     return Card(color:Colors.white,elevation:0,child:ListTile(title:Text(p,style:const TextStyle(fontWeight:FontWeight.w600)),subtitle:Text('$qty orders'),trailing:Text(money(value),style:const TextStyle(fontWeight:FontWeight.bold))));
    }),
+   if(returnRows.isNotEmpty)...[
+    const SizedBox(height:20),const Text('Returns & RTO entries',style:TextStyle(fontSize:17,fontWeight:FontWeight.bold)),const SizedBox(height:8),
+    ...returnRows.reversed.take(8).map((e)=>Card(color:Colors.white,elevation:0,child:ListTile(
+     leading:Icon('${e['RTO / Return']}'.toLowerCase()=='rto'?Icons.undo:Icons.assignment_return,color:const Color(0xFFD6A52A)),
+     title:Text('${e['RTO / Return']??'Return'} • ${e['Details']??''}',style:const TextStyle(fontWeight:FontWeight.w600)),
+     subtitle:Text('${e['Date']??''}'),
+    ))),
+   ],
+   if(rows('Bank Received').isNotEmpty)...[
+    const SizedBox(height:20),const Text('Recent bank received entries',style:TextStyle(fontSize:17,fontWeight:FontWeight.bold)),const SizedBox(height:8),
+    ...rows('Bank Received').reversed.take(5).map((e)=>Card(color:Colors.white,elevation:0,child:ListTile(
+     leading:const Icon(Icons.account_balance,color:Color(0xFFD6A52A)),
+     title:Text('${e['Firm / Account']??e['Description']??'Bank entry'}'),
+     subtitle:Text('${e['Date']??e['Settlement Date']??''} • ${e['Platform']??e['Type']??''}'),
+     trailing:Text(money(num.tryParse('${e['Bank Received']??e['Credit']??0}')??0),style:const TextStyle(fontWeight:FontWeight.bold)),
+    ))),
+   ],
    const SizedBox(height:20),const Text('Daily workflow',style:TextStyle(fontSize:17,fontWeight:FontWeight.bold)),const SizedBox(height:8),
    Wrap(spacing:8,runSpacing:8,children:[
-    _action('Add orders',Icons.add_shopping_cart,1),_action('Add purchase',Icons.add_box,3),_action('Record settlement',Icons.payments,5),
-    _action('Bank entry',Icons.account_balance,6),_action('Add expense',Icons.receipt_long,7),
+    _action('Add orders',Icons.add_shopping_cart,1),_action('Add RTO / Return',Icons.assignment_return,2),
+    _action('Bank received',Icons.account_balance,4),_action('Add expense',Icons.receipt_long,5),
    ]),
   ]);
  }
