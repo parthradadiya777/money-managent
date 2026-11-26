@@ -44,14 +44,13 @@ class BusinessManagerApp extends StatelessWidget {
 }
 
 const platforms = ['Meesho', 'Myntra', 'Flipkart', 'Amazon', 'AJIO'];
-const modules = ['Dashboard','Daily Orders','Returns & RTO','Vendor Payments','Bank Received','Expenses','Masters'];
+const modules = ['Dashboard','Daily Orders','Returns & RTO','Vendor Payments','Bank Received','Expenses'];
 const Map<String,List<String>> fields = {
  'Daily Orders':['Date','Platform','Firm / Account','Order ID','SKU / Product','Brand','Size','Color','Orders Qty','Gross Order Value','Delivered Qty','Delivered Sales','Commission / Fees','Shipping Fees','Other Deductions','Courier','AWB / Tracking No.','Customer','Pincode','Source PDF','PDF Page'],
  'Returns & RTO':['Date','RTO / Return','Details'],
  'Vendor Payments':['Payment Date','Firm Name','Vendor Name','Payment Mode','Amount Paid','Notes'],
  'Bank Received':['Date','Platform','Amount','Details','Brand'],
  'Expenses':['Date','Expense','Details','Payment Mode'],
- 'Masters':['Record Type','Name','GSTIN','State','Platform','Contact','Opening Balance','Notes'],
 };
 
 
@@ -447,7 +446,6 @@ class _BusinessHomeState extends State<BusinessHome> {
      const Text('100 per page',style:TextStyle(color:Color(0xFF8A6818),fontSize:12,fontWeight:FontWeight.w600)),
     ]),
    ],
-   if(module=='Masters')_masterHint(),
    if(filtered.isEmpty)Container(padding:const EdgeInsets.all(32),decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(16)),child:Column(children:[
     const Icon(Icons.inbox_outlined,size:42,color:Colors.black38),const SizedBox(height:10),
     Text(isDaily&&query.isNotEmpty?'No matching orders':'No records yet',style:const TextStyle(fontWeight:FontWeight.bold,fontSize:16)),
@@ -536,8 +534,6 @@ class _BusinessHomeState extends State<BusinessHome> {
    const Text('Only shipping labels are counted. Myntra tax invoices are used only to enrich order details. Multiple SKUs on one label are recorded as separate SKU lines.',style:TextStyle(color:Colors.black54,fontSize:12)),
   ]);
  }
-
- Widget _masterHint()=>Container(padding:const EdgeInsets.all(12),margin:const EdgeInsets.only(bottom:12),decoration:BoxDecoration(color:const Color(0xFFEAF2FF),borderRadius:BorderRadius.circular(12)),child:const Text('Add firms, GSTINs and vendor details here. Starter examples: Demo Fashion Store, Demo Home Store, Demo Myntra Store and all five marketplaces.',style:TextStyle(color:Color(0xFF24477E))));
 
  Future<void> _importShippingPdf() async {
   if(_pdfImporting)return;
@@ -660,12 +656,21 @@ class _BusinessHomeState extends State<BusinessHome> {
 
  List<String> _optionsFor(String module, String field) {
   final normalized = field.toLowerCase();
-  if (normalized == 'platform') {
-    final saved = rows('Masters').where((r) => '${r['Record Type']}'.toLowerCase() == 'platform').map((r) => '${r['Name']}'.trim()).where((v) => v.isNotEmpty);
-    return {...platforms, ...saved}.toList();
+  if (normalized == 'platform') return platforms;
+  if (normalized == 'vendor name' || normalized == 'vendor') {
+    return rows('Vendor Payments').map((r) => '${r['Vendor Name'] ?? ''}'.trim()).where((v) => v.isNotEmpty).toSet().toList();
   }
-  if (module!='Vendor Payments' && (normalized.contains('firm') || normalized.contains('account') || normalized.contains('gst entity'))) {
-    return rows('Masters').where((r) => '${r['Record Type']}'.toLowerCase() == 'firm').map((r) => '${r['Name']}'.trim()).where((v) => v.isNotEmpty).toSet().toList();
+  if (normalized.contains('firm') || normalized.contains('account') || normalized.contains('gst entity')) {
+    final names = <String>{};
+    for (final moduleName in ['Daily Orders','Bank Received','Vendor Payments']) {
+      for (final row in rows(moduleName)) {
+        for (final key in ['Firm / Account','Firm Name','Bank Account']) {
+          final value = '${row[key] ?? ''}'.trim();
+          if (value.isNotEmpty) names.add(value);
+        }
+      }
+    }
+    return names.toList()..sort();
   }
   if (normalized == 'type' || normalized == 'rto / return') return ['Return', 'RTO'];
   if (normalized == 'status') return ['Pending', 'Completed', 'On Hold', 'Cancelled'];
@@ -673,9 +678,6 @@ class _BusinessHomeState extends State<BusinessHome> {
   if (normalized == 'record type') return ['Firm', 'Platform', 'Vendor', 'Bank Account', 'Expense Category'];
   if (normalized == 'state') return ['Gujarat', 'Maharashtra', 'Rajasthan', 'Delhi', 'Karnataka', 'Other'];
   if (normalized == 'gst %') return ['0', '5', '12', '18', '28'];
-  if (normalized == 'bank account') {
-    return rows('Masters').where((r) => '${r['Record Type']}'.toLowerCase() == 'bank account').map((r) => '${r['Name']}'.trim()).where((v) => v.isNotEmpty).toSet().toList();
-  }
   return const [];
  }
  Widget _formField(String module, String field, TextEditingController controller) {
