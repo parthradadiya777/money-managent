@@ -335,12 +335,18 @@ class _BusinessHomeState extends State<BusinessHome> {
   final returnQty=returnRows.where((e)=>'${e['RTO / Return']??''}'.toLowerCase()=='return').fold<num>(0,(v,e)=>v+(num.tryParse('${e['Details']??0}')??0));
   final rtoQty=returnRows.where((e)=>'${e['RTO / Return']??''}'.toLowerCase()=='rto').fold<num>(0,(v,e)=>v+(num.tryParse('${e['Details']??0}')??0));
   final vendorRows=rows('Vendor Payments');
-  final pendingVendor=vendorRows.fold<num>(0,(v,e){
-   for(final key in ['Closing Balance','Pending Amount','Amount Due','Balance Due','Outstanding','Pending']){
-    final n=num.tryParse('${e[key]??''}'.replaceAll(',',''));
-    if(n!=null&&n>0)return v+n;
-   }
-   return v;
+  final latestVendorRows=<String,Map>{};
+  for(final row in vendorRows){
+   final vendor='${row['Vendor Name']??''}'.trim().toLowerCase();
+   if(vendor.isEmpty)continue;
+   final month='${row['Month']??''}'.trim();
+   final previous=latestVendorRows[vendor];
+   final previousMonth='${previous?['Month']??''}'.trim();
+   if(previous==null||month.compareTo(previousMonth)>=0)latestVendorRows[vendor]=row;
+  }
+  final pendingVendor=latestVendorRows.values.fold<num>(0,(v,e){
+   final n=num.tryParse('${e['Closing Balance']??e['Pending Amount']??e['Amount Paid']??0}'.replaceAll(',',''))??0;
+   return v+(n>0?n:0);
   });
   final bankRows=rows('Bank Received');
   final bankReceived=bankRows.fold<num>(0,(v,e)=>v+(num.tryParse('${e['Amount']??e['Bank Received']??e['Credit']??0}'.replaceAll(',',''))??0));
@@ -676,7 +682,7 @@ class _BusinessHomeState extends State<BusinessHome> {
     for(final old in rows('Vendor Payments')){
      if('\u0024{old['Vendor Name']??''}'.trim().toLowerCase()!=vendor)continue;
      final oldMonth='\u0024{old['Month']??''}'.trim();
-     if(oldMonth.isNotEmpty&&oldMonth.compareTo(month)<=0&&oldMonth.compareTo(previousMonth)>=0){
+     if((oldMonth.isEmpty||oldMonth.compareTo(month)<=0)&&oldMonth.compareTo(previousMonth)>=0){
       previousMonth=oldMonth;
       previous=num.tryParse('\u0024{old['Closing Balance']??old['Pending Amount']??old['Amount Paid']??0}'.replaceAll(',',''))??0;
      }
