@@ -48,7 +48,7 @@ const modules = ['Dashboard','Daily Orders','Returns & RTO','Vendor Payments','B
 const Map<String,List<String>> fields = {
  'Daily Orders':['Date','Platform','Firm / Account','Order ID','SKU / Product','Brand','Size','Color','Orders Qty','Gross Order Value','Delivered Qty','Delivered Sales','Commission / Fees','Shipping Fees','Other Deductions','Courier','AWB / Tracking No.','Customer','Pincode','Source PDF','PDF Page'],
  'Returns & RTO':['Date','RTO / Return','Details'],
- 'Vendor Payments':['Payment Date','Firm Name','Vendor Name','Payment Mode','Pending Amount','Notes'],
+ 'Vendor Payments':['Month','Firm Name','Vendor Name','Opening Balance','New Amount','Closing Balance','Amount Paid','Payment Date','Payment Mode','Notes'],
  'Bank Received':['Date','Platform','Amount','Details','Brand'],
  'Expenses':['Date','Expense','Details','Payment Mode'],
 };
@@ -654,6 +654,7 @@ class _BusinessHomeState extends State<BusinessHome> {
   final controllers=<String,TextEditingController>{};
   for(final f in fields[module]??[])controllers[f]=TextEditingController();
   for(final f in ['Date','Purchase Date','Payment Date','Settlement Date']){if(controllers.containsKey(f))controllers[f]!.text=DateTime.now().toIso8601String().substring(0,10);}
+  if(module=='Vendor Payments'&&controllers.containsKey('Month')){final now=DateTime.now();controllers['Month']!.text='${now.year}-${now.month.toString().padLeft(2,'0')}';controllers['Payment Date']!.text=now.toIso8601String().substring(0,10);}
   if(controllers.containsKey('Platform'))controllers['Platform']!.text='Myntra';
   if(controllers.containsKey('Brand'))controllers['Brand']!.text='JIPROSTORE';
   final ok=await showDialog<bool>(context:context,builder:(ctx)=>Dialog(
@@ -668,6 +669,24 @@ class _BusinessHomeState extends State<BusinessHome> {
   ));
   if(ok==true){
    final record=<String,dynamic>{for(final e in controllers.entries)e.key:e.value.text.trim()};
+   if(module=='Vendor Payments'){
+    final vendor='\u0024{record['Vendor Name']??''}'.trim().toLowerCase();
+    final month='\u0024{record['Month']??''}'.trim();
+    num previous=0;String previousMonth='';
+    for(final old in rows('Vendor Payments')){
+     if('\u0024{old['Vendor Name']??''}'.trim().toLowerCase()!=vendor)continue;
+     final oldMonth='\u0024{old['Month']??''}'.trim();
+     if(oldMonth.isNotEmpty&&oldMonth.compareTo(month)<=0&&oldMonth.compareTo(previousMonth)>=0){
+      previousMonth=oldMonth;
+      previous=num.tryParse('\u0024{old['Closing Balance']??old['Pending Amount']??old['Amount Paid']??0}'.replaceAll(',',''))??0;
+     }
+    }
+    if((record['Opening Balance']??'').toString().trim().isEmpty)record['Opening Balance']=previous.toStringAsFixed(2);
+    final opening=num.tryParse('\u0024{record['Opening Balance']??0}'.replaceAll(',',''))??0;
+    final added=num.tryParse('\u0024{record['New Amount']??0}'.replaceAll(',',''))??0;
+    final paid=num.tryParse('\u0024{record['Amount Paid']??0}'.replaceAll(',',''))??0;
+    record['Closing Balance']=(opening+added-paid).toStringAsFixed(2);
+   }
    if(record.values.every((v)=>'$v'.trim().isEmpty)){
     if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Please enter at least one field.')));
    }else{
@@ -777,13 +796,16 @@ class _BusinessHomeState extends State<BusinessHome> {
   final list=rows('Vendor Payments');
   if(index<0||index>=list.length)return;
   final row=list[index];
-  final pending=num.tryParse('${row['Pending Amount']??row['Amount Paid']??0}'.toString().replaceAll(',',''))??0;
+  final opening=num.tryParse('\u0024{row['Opening Balance']??0}'.replaceAll(',',''))??0;
+  final added=num.tryParse('\u0024{row['New Amount']??0}'.replaceAll(',',''))??0;
+  final paidBefore=num.tryParse('\u0024{row['Amount Paid']??0}'.replaceAll(',',''))??0;
+  final pending=num.tryParse('\u0024{row['Closing Balance']??row['Pending Amount']??(opening+added-paidBefore)}'.replaceAll(',',''))??0;
   final amountController=TextEditingController();
   final noteController=TextEditingController();
   final ok=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(
-   title:Text('Record payment • ${row['Vendor Name']??'Vendor'}'),
+   title:Text('Record payment • \u0024{row['Vendor Name']??'Vendor'}'),
    content:Column(mainAxisSize:MainAxisSize.min,children:[
-    Align(alignment:Alignment.centerLeft,child:Text('Current pending: ₹${pending.toStringAsFixed(2)}',style:const TextStyle(fontWeight:FontWeight.bold,color:Color(0xFF8A6818)))),
+    Align(alignment:Alignment.centerLeft,child:Text('Current pending: ₹\u0024{pending.toStringAsFixed(2)}',style:const TextStyle(fontWeight:FontWeight.bold,color:Color(0xFF8A6818)))),
     const SizedBox(height:12),
     TextField(controller:amountController,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'Payment amount',prefixText:'₹ ')),
     const SizedBox(height:10),
@@ -795,22 +817,24 @@ class _BusinessHomeState extends State<BusinessHome> {
    ],
   ));
   if(ok==true){
-   final paid=num.tryParse(amountController.text.trim().replaceAll(',',''));
-   if(paid==null||paid<=0){
+   final paidNow=num.tryParse(amountController.text.trim().replaceAll(',',''));
+   if(paidNow==null||paidNow<=0){
     if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Enter a valid payment amount.')));
-   }else if(paid>pending){
+   }else if(paidNow>pending){
     if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Payment cannot be greater than pending amount.')));
    }else{
     final updated={...row};
-    updated['Pending Amount']=(pending-paid).toStringAsFixed(2);
-    updated.remove('Amount Paid');
+    final totalPaid=paidBefore+paidNow;
+    updated['Amount Paid']=totalPaid.toStringAsFixed(2);
+    updated['Closing Balance']=(pending-paidNow).toStringAsFixed(2);
+    updated.remove('Pending Amount');
     final now=DateTime.now();
-    final stamp='${now.year.toString().padLeft(4,'0')}-${now.month.toString().padLeft(2,'0')}-${now.day.toString().padLeft(2,'0')}';
+    final stamp='\u0024{now.year.toString().padLeft(4,'0')}-\u0024{now.month.toString().padLeft(2,'0')}-\u0024{now.day.toString().padLeft(2,'0')}';
     final history=(updated['_paymentHistory']??'').toString();
-    updated['_paymentHistory']=[history,'₹${paid.toStringAsFixed(2)} • $stamp${noteController.text.trim().isEmpty?'':' • ${noteController.text.trim()}'}'].where((v)=>v.isNotEmpty).join('\\n');
+    updated['_paymentHistory']=[history,'₹\u0024{paidNow.toStringAsFixed(2)} • $stamp\u0024{noteController.text.trim().isEmpty?'':' • \u0024{noteController.text.trim()}'}'].where((v)=>v.isNotEmpty).join('\\n');
     list[index]=updated;
     await saveRows('Vendor Payments',list);
-    if(mounted){setState((){});ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Payment saved. Remaining pending: ₹${(pending-paid).toStringAsFixed(2)}')));}
+    if(mounted){setState((){});ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Payment saved. Remaining pending: ₹\u0024{(pending-paidNow).toStringAsFixed(2)}')));}
    }
   }
   amountController.dispose();noteController.dispose();
