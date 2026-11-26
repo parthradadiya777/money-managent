@@ -332,9 +332,9 @@ class _BusinessHomeState extends State<BusinessHome> {
  Widget _dashboard(){
   final orderQty=sum('Daily Orders','Orders Qty'),sales=sum('Daily Orders','Delivered Sales'),delivered=sum('Daily Orders','Delivered Qty');
   final returnRows=rows('Returns & RTO');
-  final returnQty=returnRows.where((e)=>'${e['RTO / Return']}'.toLowerCase()=='return').length;
-  final rto=returnRows.where((e)=>'${e['RTO / Return']}'.toLowerCase()=='rto').length;
-  final received=sum('Bank Received','Amount')+sum('Bank Received','Bank Received')+sum('Bank Received','Credit');
+  final returnQty=returnRows.where((e)=>'${e['RTO / Return']}'.toLowerCase()=='return').fold<num>(0,(total,e)=>total+(num.tryParse('${e['Details']??0}')??0));
+  final rto=returnRows.where((e)=>'${e['RTO / Return']}'.toLowerCase()=='rto').fold<num>(0,(total,e)=>total+(num.tryParse('${e['Details']??0}')??0));
+  final received=sum('Bank Received','Bank Received')+sum('Bank Received','Credit');
   final bank=(num.tryParse('${box.get('openingBank',defaultValue:0)}')??0)+sum('Bank Received','Credit')-sum('Bank Received','Debit');
   return ListView(padding:const EdgeInsets.all(22),children:[
    Row(children:[const Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
