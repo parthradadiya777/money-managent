@@ -329,61 +329,84 @@ class _BusinessHomeState extends State<BusinessHome> {
   if(choice!=null&&mounted)setState(()=>selected=choice);
  }
  Widget _dashboard(){
-  final orderQty=sum('Daily Orders','Orders Qty'),sales=sum('Daily Orders','Delivered Sales'),delivered=sum('Daily Orders','Delivered Qty');
+  final orderRows=rows('Daily Orders');
+  final orderQty=orderRows.fold<num>(0,(v,e)=>v+(num.tryParse('${e['Orders Qty']??0}')??0));
   final returnRows=rows('Returns & RTO');
-  final returnQty=returnRows.where((e)=>'${e['RTO / Return']}'.toLowerCase()=='return').fold<num>(0,(total,e)=>total+(num.tryParse('${e['Details']??0}')??0));
-  final rto=returnRows.where((e)=>'${e['RTO / Return']}'.toLowerCase()=='rto').fold<num>(0,(total,e)=>total+(num.tryParse('${e['Details']??0}')??0));
-  final received=sum('Bank Received','Bank Received')+sum('Bank Received','Credit');
-  final bank=(num.tryParse('${box.get('openingBank',defaultValue:0)}')??0)+sum('Bank Received','Credit')-sum('Bank Received','Debit');
-  return ListView(padding:const EdgeInsets.all(22),children:[
-   Row(children:[const Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-    Text('Good business starts with clear numbers.',style:TextStyle(fontSize:20,fontWeight:FontWeight.bold,color:Color(0xFF17233D))),
-    SizedBox(height:4),Text('Your marketplace, purchase and cash-flow snapshot.',style:TextStyle(color:Colors.black54)),
-   ])),FilledButton.icon(onPressed:_quickAdd,icon:const Icon(Icons.add),label:const Text('Quick Entry'))]),
-   const SizedBox(height:20),
-   LayoutBuilder(builder:(context,c){
-    final count=c.maxWidth>950?4:(c.maxWidth>560?2:1);
-    final cards=[
-     _metric('Total Orders',orderQty,Icons.shopping_bag_outlined,const Color(0xFFD6A52A),false),
-     _metric('Delivered Sales',sales,Icons.trending_up,const Color(0xFF16865B),true),
-     _metric('Delivered Qty',delivered,Icons.local_shipping_outlined,const Color(0xFF8A5BD1),false),
-     _metric('Bank Balance',bank,Icons.account_balance,const Color(0xFFDA8B25),true),
-     _metric('Returns',returnQty,Icons.assignment_return,const Color(0xFFD65A5A),false),
-     _metric('RTO',rto,Icons.undo,const Color(0xFFB76A3C),false),
-     _metric('Marketplace Received',received,Icons.payments,const Color(0xFF16865B),true),
-      ];
-    return GridView.count(crossAxisCount:count,shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),childAspectRatio:count==1?3.4:2.1,crossAxisSpacing:12,mainAxisSpacing:12,children:cards);
-   }),
-   const SizedBox(height:24),const Text('Marketplace performance',style:TextStyle(fontSize:17,fontWeight:FontWeight.bold)),const SizedBox(height:10),
-   ...platforms.map((p){
-    final list=rows('Daily Orders').where((e)=>'${e['Platform']}'.toLowerCase()==p.toLowerCase()).toList();
-    final qty=list.fold<num>(0,(v,e)=>v+(num.tryParse('${e['Orders Qty']??0}')??0));
-    final value=list.fold<num>(0,(v,e)=>v+(num.tryParse('${e['Delivered Sales']??0}')??0));
-    return Card(color:Colors.white,elevation:0,child:ListTile(title:Text(p,style:const TextStyle(fontWeight:FontWeight.w600)),subtitle:Text('$qty orders'),trailing:Text(money(value),style:const TextStyle(fontWeight:FontWeight.bold))));
-   }),
-   if(returnRows.isNotEmpty)...[
-    const SizedBox(height:20),const Text('Returns & RTO entries',style:TextStyle(fontSize:17,fontWeight:FontWeight.bold)),const SizedBox(height:8),
-    ...returnRows.reversed.take(8).map((e)=>Card(color:Colors.white,elevation:0,child:ListTile(
-     leading:Icon('${e['RTO / Return']}'.toLowerCase()=='rto'?Icons.undo:Icons.assignment_return,color:const Color(0xFFD6A52A)),
-     title:Text('${e['RTO / Return']??'Return'} • ${e['Details']??''}',style:const TextStyle(fontWeight:FontWeight.w600)),
-     subtitle:Text('${e['Date']??''}'),
-    ))),
-   ],
-   if(rows('Bank Received').isNotEmpty)...[
-    const SizedBox(height:20),const Text('Recent bank received entries',style:TextStyle(fontSize:17,fontWeight:FontWeight.bold)),const SizedBox(height:8),
-    ...rows('Bank Received').reversed.take(5).map((e)=>Card(color:Colors.white,elevation:0,child:ListTile(
-     leading:const Icon(Icons.account_balance,color:Color(0xFFD6A52A)),
-     title:Text('${e['Firm / Account']??e['Description']??'Bank entry'}'),
-     subtitle:Text('${e['Date']??e['Settlement Date']??''} • ${e['Platform']??e['Type']??''}'),
-     trailing:Text(money(num.tryParse('${e['Bank Received']??e['Credit']??0}')??0),style:const TextStyle(fontWeight:FontWeight.bold)),
-    ))),
-   ],
-   const SizedBox(height:20),const Text('Daily workflow',style:TextStyle(fontSize:17,fontWeight:FontWeight.bold)),const SizedBox(height:8),
-   Wrap(spacing:8,runSpacing:8,children:[
-    _action('Add orders',Icons.add_shopping_cart,1),_action('Add RTO / Return',Icons.assignment_return,2),
-    _action('Bank received',Icons.account_balance,4),_action('Add expense',Icons.receipt_long,5),
-   ]),
-  ]);
+  final returnQty=returnRows.where((e)=>'${e['RTO / Return']??''}'.toLowerCase()=='return').fold<num>(0,(v,e)=>v+(num.tryParse('${e['Details']??0}')??0));
+  final rtoQty=returnRows.where((e)=>'${e['RTO / Return']??''}'.toLowerCase()=='rto').fold<num>(0,(v,e)=>v+(num.tryParse('${e['Details']??0}')??0));
+  final vendorRows=rows('Vendor Payments');
+  final pendingVendor=vendorRows.fold<num>(0,(v,e){
+   for(final key in ['Pending Amount','Amount Due','Balance Due','Outstanding','Pending']){
+    final n=num.tryParse('${e[key]??''}'.replaceAll(',',''));
+    if(n!=null&&n>0)return v+n;
+   }
+   return v;
+  });
+  final bankRows=rows('Bank Received');
+  final bankReceived=bankRows.fold<num>(0,(v,e)=>v+(num.tryParse('${e['Amount']??e['Bank Received']??e['Credit']??0}'.replaceAll(',',''))??0));
+  final expenseRows=rows('Expenses');
+  final expenseTotal=expenseRows.fold<num>(0,(v,e)=>v+(num.tryParse('${e['Expense']??0}'.replaceAll(',',''))??0));
+  final recentReturns=returnRows.reversed.take(2).toList();
+  final recentBank=bankRows.reversed.take(2).toList();
+  final recentExpenses=expenseRows.reversed.take(2).toList();
+  Widget metricLink(String label,num value,IconData icon,Color color,bool currency,int page)=>
+   InkWell(borderRadius:BorderRadius.circular(16),onTap:()=>setState(()=>selected=page),child:_metric(label,value,icon,color,currency));
+  Widget recentCard(String title,IconData icon,List<Map> data,int page,String Function(Map) primary,String Function(Map) secondary){
+   return Expanded(child:InkWell(borderRadius:BorderRadius.circular(14),onTap:()=>setState(()=>selected=page),child:Container(
+    padding:const EdgeInsets.all(12),decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(14),border:Border.all(color:const Color(0xFFE8ECF4))),
+    child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+     Row(children:[Icon(icon,size:17,color:const Color(0xFFD6A52A)),const SizedBox(width:7),Expanded(child:Text(title,style:const TextStyle(fontWeight:FontWeight.bold,fontSize:13))),Text('View all',style:TextStyle(fontSize:10,color:Colors.blue.shade700))]),
+     const SizedBox(height:7),
+     if(data.isEmpty)const Text('No entries yet',style:TextStyle(fontSize:11,color:Colors.black45))
+     else ...data.map((e)=>Padding(padding:const EdgeInsets.only(top:5),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      Text(primary(e),maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(fontSize:12,fontWeight:FontWeight.w600)),
+      Text(secondary(e),maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(fontSize:10,color:Colors.black54)),
+     ]))),
+    ]),
+   )));
+  }
+  return LayoutBuilder(builder:(context, constraints){
+   final compact=constraints.maxHeight<760;
+   return Padding(padding:EdgeInsets.all(compact?14:20),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+    Row(children:[const Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+     Text('Business Overview',style:TextStyle(fontSize:20,fontWeight:FontWeight.bold,color:Color(0xFF17233D))),
+     Text('Live summary from all your business entries',style:TextStyle(fontSize:12,color:Colors.black54)),
+    ])),FilledButton.icon(onPressed:_quickAdd,icon:const Icon(Icons.add,size:18),label:const Text('Quick Entry'))]),
+    SizedBox(height:compact?10:16),
+    Expanded(flex:5,child:LayoutBuilder(builder:(context,c){
+     final count=c.maxWidth>1000?3:(c.maxWidth>560?3:2);
+     final cardHeight=compact?78.0:92.0;
+     final cards=[
+      metricLink('Total Orders',orderQty,Icons.shopping_bag_outlined,const Color(0xFFD6A52A),false,1),
+      metricLink('Returns',returnQty,Icons.assignment_return,const Color(0xFFD65A5A),false,2),
+      metricLink('RTO',rtoQty,Icons.undo,const Color(0xFFB76A3C),false,2),
+      metricLink('Pending Vendor Payment',pendingVendor,Icons.payments,const Color(0xFF8A5BD1),true,3),
+      metricLink('Bank Received',bankReceived,Icons.account_balance,const Color(0xFF16865B),true,4),
+      metricLink('Expenses',expenseTotal,Icons.receipt_long,const Color(0xFFDA8B25),true,5),
+     ];
+     return GridView.count(crossAxisCount:count,childAspectRatio:c.maxWidth/count/cardHeight,mainAxisSpacing:9,crossAxisSpacing:9,physics:const NeverScrollableScrollPhysics(),children:cards);
+    })),
+    SizedBox(height:compact?8:14),
+    Row(children:[const Expanded(child:Text('Marketplace performance',style:TextStyle(fontSize:15,fontWeight:FontWeight.bold))),Text('${orderRows.length} SKU records',style:const TextStyle(fontSize:10,color:Colors.black54))]),
+    const SizedBox(height:6),
+    SizedBox(height:compact?56:68,child:Row(children:platforms.map((p){
+     final list=orderRows.where((e)=>'${e['Platform']??''}'.toLowerCase()==p.toLowerCase()).toList();
+     final qty=list.fold<num>(0,(v,e)=>v+(num.tryParse('${e['Orders Qty']??0}')??0));
+     return Expanded(child:Padding(padding:const EdgeInsets.only(right:6),child:InkWell(onTap:()=>setState(()=>selected=1),borderRadius:BorderRadius.circular(10),child:Container(padding:const EdgeInsets.all(8),decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(10),border:Border.all(color:const Color(0xFFE8ECF4))),child:Column(mainAxisAlignment:MainAxisAlignment.center,crossAxisAlignment:CrossAxisAlignment.start,children:[
+      Text(p,style:const TextStyle(fontSize:11,fontWeight:FontWeight.bold),maxLines:1,overflow:TextOverflow.ellipsis),
+      Text('${qty.toStringAsFixed(0)} orders',style:const TextStyle(fontSize:10,color:Colors.black54)),
+     ])))));
+    }).toList())),
+    SizedBox(height:compact?8:12),
+    Expanded(flex:3,child:Row(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+     recentCard('Returns & RTO',Icons.assignment_return,recentReturns,2,(e)=>'${e['RTO / Return']??'Return'} • ${e['Details']??''}',(e)=>'${e['Date']??''}'),
+     const SizedBox(width:8),
+     recentCard('Bank Received',Icons.account_balance,recentBank,4,(e)=>'${e['Platform']??e['Firm / Account']??'Bank entry'} • ₹${e['Amount']??e['Credit']??e['Bank Received']??0}',(e)=>'${e['Date']??''}'),
+     const SizedBox(width:8),
+     recentCard('Expenses',Icons.receipt_long,recentExpenses,5,(e)=>'${e['Expense']??0} • ${e['Details']??''}',(e)=>'${e['Date']??''}'),
+    ])),
+   ]));
+  });
  }
  Widget _metric(String label,num value,IconData icon,Color color,bool currency)=>Card(elevation:0,color:Colors.white,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(16),side:const BorderSide(color:Color(0xFFE8ECF4))),child:Padding(padding:const EdgeInsets.all(16),child:Row(children:[
   Container(width:42,height:42,decoration:BoxDecoration(color:color.withOpacity(.11),borderRadius:BorderRadius.circular(12)),child:Icon(icon,color:color)),const SizedBox(width:12),
