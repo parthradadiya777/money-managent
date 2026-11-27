@@ -9,6 +9,7 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'dart:typed_data';
 import 'cloud_sync.dart';
+import 'financial_calculations.dart';
 import 'myntra_label_parser.dart';
 import 'meesho_label_parser.dart';
 
@@ -628,15 +629,7 @@ class _BusinessHomeState extends State<BusinessHome> {
 
   String _moduleTitle(String module)=>module=='Vendor Payment Transactions'?'Vendor Pending Payment':module;
   String _fyLabel(int y)=>'$y-${(y+1).toString().substring(2)}';
-  DateTime? _dateOf(Map r){
-   for(final key in ['Date','Payment Date','Month']){
-    final value='${r[key]??''}'.trim();
-    if(value.isEmpty||value.toLowerCase().contains('not detected'))continue;
-    final parsed=DateTime.tryParse(value.length==7?'$value-01':value);
-    if(parsed!=null)return parsed;
-   }
-   return null;
-  }
+  DateTime? _dateOf(Map r)=>parseAccountingDate(r);
   List<Map> _periodRows(String module)=>rows(module).where((r){final d=_dateOf(r);if(d==null)return selectedMonth==0;final fy=d.month>=4?d.year:d.year-1;return fy==selectedFyStart&&(selectedMonth==0||d.month==selectedMonth);}).toList();
   String get _periodLabel=>selectedMonth==0?'FY ${_fyLabel(selectedFyStart)}':'${['','January','February','March','April','May','June','July','August','September','October','November','December'][selectedMonth]} ${selectedFyStart+(selectedMonth>=4?0:1)}';
   Widget _periodFilterBar(){
@@ -659,18 +652,16 @@ class _BusinessHomeState extends State<BusinessHome> {
    ]));
   }
   num _total(List<Map> data,String field)=>data.fold<num>(0,(v,r)=>v+(num.tryParse('${r[field]??0}'.replaceAll(',',''))??0));
-  DateTime _periodStart()=>selectedMonth==0?DateTime(selectedFyStart,4,1):DateTime(selectedFyStart+(selectedMonth>=4?0:1),selectedMonth,1);
+  DateTime _periodStart()=>accountingPeriodStart(selectedFyStart,selectedMonth);
   DateTime _periodEndExclusive(){final start=_periodStart();return selectedMonth==0?DateTime(start.year+1,4,1):DateTime(start.year,start.month+1,1);}
   bool _beforePeriod(Map row){final d=_dateOf(row);return d!=null&&d.isBefore(_periodStart());}
-  num _cashOpeningBalance(){
-   final start=_periodStart();
-   final balances=rows('Opening Balances').where((r){final d=_dateOf(r);return d!=null&&!d.isAfter(start);}).toList();
-   final opening=_total(balances,'Opening Balance');
-   final priorBank=rows('Bank Received').where(_beforePeriod).toList();
-   final priorPayments=rows('Vendor Payment Transactions').where(_beforePeriod).toList();
-   final priorExpenses=rows('Expenses').where(_beforePeriod).toList();
-   return opening+_total(priorBank,'Amount')-_total(priorPayments,'Amount')-_total(priorExpenses,'Expense');
-  }
+  num _cashOpeningBalance()=>calculateOpeningCashBalance(
+   openingBalances:rows('Opening Balances'),
+   bankReceipts:rows('Bank Received'),
+   vendorPayments:rows('Vendor Payment Transactions'),
+   expenses:rows('Expenses'),
+   periodStart:_periodStart(),
+  );
   num _returnQty(List<Map> data,String type)=>data.where((r)=>'${r['RTO / Return']??''}'.toLowerCase()==type.toLowerCase()).fold<num>(0,(v,r)=>v+(num.tryParse('${r['Details']??0}'.replaceAll(',',''))??0));
   Widget _financialReportsPage(){
    final o=_periodRows('Daily Orders'),ret=_periodRows('Returns & RTO'),v=_periodRows('Vendor Payments'),b=_periodRows('Bank Received'),e=_periodRows('Expenses'),p=_periodRows('Vendor Payment Transactions');
