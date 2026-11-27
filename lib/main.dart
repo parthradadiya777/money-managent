@@ -403,8 +403,6 @@ class _BusinessHomeState extends State<BusinessHome> {
     try {
       doc = PdfDocument();
       doc.pageSettings.orientation = PdfPageOrientation.landscape;
-      final page = doc.pages.add();
-      final size = page.getClientSize();
       final navy = PdfSolidBrush(PdfColor(22, 35, 61));
       final gold = PdfSolidBrush(PdfColor(214, 165, 42));
       final grey = PdfSolidBrush(PdfColor(95, 105, 120));
@@ -412,14 +410,14 @@ class _BusinessHomeState extends State<BusinessHome> {
       final titleFont = PdfStandardFont(PdfFontFamily.helvetica, 19, style: PdfFontStyle.bold);
       final sectionFont = PdfStandardFont(PdfFontFamily.helvetica, 11, style: PdfFontStyle.bold);
       final bodyFont = PdfStandardFont(PdfFontFamily.helvetica, 9);
-      page.graphics.drawRectangle(brush: navy, bounds: Rect.fromLTWH(0, 0, size.width, 76));
-      page.graphics.drawString('DIGITECHIFIED', PdfStandardFont(PdfFontFamily.helvetica, 10, style: PdfFontStyle.bold), brush: gold, bounds: Rect.fromLTWH(24, 12, 250, 14));
-      page.graphics.drawString('FINANCIAL STATEMENT', titleFont, brush: white, bounds: Rect.fromLTWH(24, 29, 440, 28));
-      page.graphics.drawString(_periodLabel, bodyFont, brush: white, bounds: Rect.fromLTWH(size.width - 190, 32, 165, 18));
-      var y = 92.0;
-      final o = _periodRows('Daily Orders'), ret = _periodRows('Returns & RTO');
-      final expenses = _periodRows('Expenses'), bank = _periodRows('Bank Received');
-      final payments = _periodRows('Vendor Payment Transactions'), vendors = _periodRows('Vendor Payments');
+      final boldFont = PdfStandardFont(PdfFontFamily.helvetica, 9, style: PdfFontStyle.bold);
+      final smallFont = PdfStandardFont(PdfFontFamily.helvetica, 8);
+      final o = _periodRows('Daily Orders');
+      final ret = _periodRows('Returns & RTO');
+      final expenses = _periodRows('Expenses');
+      final bank = _periodRows('Bank Received');
+      final payments = _periodRows('Vendor Payment Transactions');
+      final vendors = _periodRows('Vendor Payments');
       final sales = _total(o, 'Delivered Sales');
       final fees = _total(o, 'Commission / Fees') + _total(o, 'Shipping Fees') + _total(o, 'Other Deductions');
       final expenseTotal = _total(expenses, 'Expense');
@@ -430,64 +428,117 @@ class _BusinessHomeState extends State<BusinessHome> {
       final returns = _returnQty(ret, 'Return');
       final rto = _returnQty(ret, 'RTO');
       final delivered = (orders - returns - rto).clamp(0, double.infinity);
-      void section(String label) {
-        page.graphics.drawRectangle(brush: gold, bounds: Rect.fromLTWH(22, y, size.width - 44, 22));
-        page.graphics.drawString(label, sectionFont, brush: navy, bounds: Rect.fromLTWH(30, y + 4, size.width - 60, 15));
-        y += 29;
+      final pending = vendors.fold<num>(0, (v, r) =>
+        v + (num.tryParse('${r['Closing Balance'] ?? r['Pending Amount'] ?? 0}'.toString().replaceAll(',', '')) ?? 0));
+
+      late PdfPage page;
+      late Size pageSize;
+      void addPage(int pageNo) {
+        page = doc!.pages.add();
+        pageSize = page.getClientSize();
+        page.graphics.drawRectangle(brush: navy, bounds: Rect.fromLTWH(0, 0, pageSize.width, 76));
+        page.graphics.drawString('DIGITECHIFIED', PdfStandardFont(PdfFontFamily.helvetica, 10, style: PdfFontStyle.bold),
+          brush: gold, bounds: Rect.fromLTWH(24, 11, 250, 14));
+        page.graphics.drawString('FINANCIAL STATEMENT', titleFont, brush: white,
+          bounds: Rect.fromLTWH(24, 29, 440, 28));
+        page.graphics.drawString('$_periodLabel  •  Page $pageNo of 2', bodyFont, brush: white,
+          bounds: Rect.fromLTWH(pageSize.width - 210, 31, 185, 18),
+          format: PdfStringFormat(alignment: PdfTextAlignment.right));
       }
-      void line(String label, String value, {bool bold = false}) {
-        final font = bold ? PdfStandardFont(PdfFontFamily.helvetica, 9, style: PdfFontStyle.bold) : bodyFont;
-        page.graphics.drawString(label, font, brush: grey, bounds: Rect.fromLTWH(30, y, size.width * .62, 16));
-        page.graphics.drawString(value, font, brush: navy, bounds: Rect.fromLTWH(size.width * .68, y, size.width * .27, 16), format: PdfStringFormat(alignment: PdfTextAlignment.right));
-        y += 19;
+      double section(double y, String label) {
+        page.graphics.drawRectangle(brush: gold, bounds: Rect.fromLTWH(22, y, pageSize.width - 44, 23));
+        page.graphics.drawString(label, sectionFont, brush: navy,
+          bounds: Rect.fromLTWH(31, y + 4, pageSize.width - 62, 15));
+        return y + 31;
       }
-      section('PROFIT & LOSS STATEMENT');
-      line('Delivered sales revenue', money(sales));
-      line('Marketplace fees and deductions', money(fees));
-      line('Operating expenses', money(expenseTotal));
-      line('Operating result before inventory cost', money(sales - fees - expenseTotal), bold: true);
-      line('Vendor purchases (disclosed separately; not treated as COGS)', money(purchases));
-      y += 8;
-      section('MARKETPLACE OPERATIONS');
-      final grid = PdfGrid();
-      grid.columns.add(count: 5);
+      double line(double y, String label, String value, {bool bold = false}) {
+        final font = bold ? boldFont : bodyFont;
+        page.graphics.drawString(label, font, brush: grey,
+          bounds: Rect.fromLTWH(32, y, pageSize.width * .66, 16));
+        page.graphics.drawString(value, font, brush: navy,
+          bounds: Rect.fromLTWH(pageSize.width * .70, y, pageSize.width * .25, 16),
+          format: PdfStringFormat(alignment: PdfTextAlignment.right));
+        return y + 21;
+      }
+
+      // Page 1: Profit & Loss and marketplace operations.
+      addPage(1);
+      var y = 96.0;
+      y = section(y, 'PROFIT & LOSS STATEMENT');
+      y = line(y, 'Delivered sales revenue', money(sales));
+      y = line(y, 'Marketplace fees and deductions', money(fees));
+      y = line(y, 'Operating expenses', money(expenseTotal));
+      y = line(y, 'Operating result before inventory cost', money(sales - fees - expenseTotal), bold: true);
+      y = line(y, 'Vendor purchases (shown separately; not treated as COGS)', money(purchases));
+      y += 14;
+      y = section(y, 'MARKETPLACE OPERATIONS');
+      final left = 30.0;
+      final tableWidth = pageSize.width - 60;
+      final colWidths = [tableWidth * .32, tableWidth * .17, tableWidth * .17, tableWidth * .17, tableWidth * .17];
       final headers = ['Platform', 'Orders', 'Delivered', 'Returns', 'RTO'];
-      final header = grid.headers.add(1)[0];
-      for (var c = 0; c < headers.length; c++) { header.cells[c].value = headers[c]; }
-      header.style.backgroundBrush = navy;
-      header.style.textBrush = white;
-      header.style.font = PdfStandardFont(PdfFontFamily.helvetica, 9, style: PdfFontStyle.bold);
-      for (final platform in platforms) {
-        final platformOrders = o.where((r) => '${r['Platform'] ?? ''}'.toLowerCase() == platform.toLowerCase()).toList();
-        final platformReturns = ret.where((r) => '${r['Platform'] ?? ''}'.toLowerCase() == platform.toLowerCase()).toList();
-        final q = _total(platformOrders, 'Orders Qty');
-        final rr = _returnQty(platformReturns, 'Return');
-        final rt = _returnQty(platformReturns, 'RTO');
-        final row = grid.rows.add();
-        [platform, q.toStringAsFixed(0), (q - rr - rt).clamp(0, double.infinity).toStringAsFixed(0), rr.toStringAsFixed(0), rt.toStringAsFixed(0)].asMap().forEach((i, v) => row.cells[i].value = v);
+      var x = left;
+      page.graphics.drawRectangle(brush: navy, bounds: Rect.fromLTWH(left, y, tableWidth, 25));
+      for (var c = 0; c < headers.length; c++) {
+        page.graphics.drawString(headers[c], PdfStandardFont(PdfFontFamily.helvetica, 9, style: PdfFontStyle.bold),
+          brush: white, bounds: Rect.fromLTWH(x + 7, y + 6, colWidths[c] - 12, 14));
+        x += colWidths[c];
       }
-      grid.style = PdfGridStyle(font: bodyFont, cellPadding: PdfPaddings(left: 7, right: 7, top: 5, bottom: 5));
-      final gridResult = grid.draw(page: page, bounds: Rect.fromLTWH(22, y, size.width - 44, 150)) as PdfLayoutResult;
-      y = gridResult.bounds.bottom + 18;
-      section('CASH FLOW SUMMARY');
-      line('Bank receipts recorded', money(bankTotal));
-      line('Vendor payments made', money(paymentTotal));
-      line('Operating expenses paid/recorded', money(expenseTotal));
-      line('Net tracked cash movement', money(bankTotal - paymentTotal - expenseTotal), bold: true);
-      y += 8;
-      section('BALANCE SHEET – RECORDED POSITION');
-      line('Vendor payable / pending balances', money(vendors.fold<num>(0, (v, r) => v + (num.tryParse('${r['Closing Balance'] ?? r['Pending Amount'] ?? 0}') ?? 0))));
-      line('Inventory opening / closing value', 'NOT RECORDED');
-      line('Marketplace receivables / unsettled amount', 'NOT RECORDED');
-      line('Opening bank and cash balances', 'NOT RECORDED');
-      line('Loans and owner capital', 'NOT RECORDED');
-      page.graphics.drawString('Note: This report uses entered records only. Missing opening balances, inventory, receivables, loans and capital are not estimated.', PdfStandardFont(PdfFontFamily.helvetica, 8, style: PdfFontStyle.italic), brush: grey, bounds: Rect.fromLTWH(24, size.height - 28, size.width - 48, 16));
+      y += 25;
+      for (final platform in platforms) {
+        final po = o.where((r) => '${r['Platform'] ?? ''}'.toLowerCase() == platform.toLowerCase()).toList();
+        final pr = ret.where((r) => '${r['Platform'] ?? ''}'.toLowerCase() == platform.toLowerCase()).toList();
+        final q = _total(po, 'Orders Qty');
+        final rr = _returnQty(pr, 'Return');
+        final rt = _returnQty(pr, 'RTO');
+        final values = [platform, q.toStringAsFixed(0), (q - rr - rt).clamp(0, double.infinity).toStringAsFixed(0), rr.toStringAsFixed(0), rt.toStringAsFixed(0)];
+        page.graphics.drawRectangle(pen: PdfPen(PdfColor(225, 229, 235)), bounds: Rect.fromLTWH(left, y, tableWidth, 25));
+        x = left;
+        for (var c = 0; c < values.length; c++) {
+          page.graphics.drawString(values[c], bodyFont, brush: navy,
+            bounds: Rect.fromLTWH(x + 7, y + 6, colWidths[c] - 12, 14));
+          x += colWidths[c];
+        }
+        y += 25;
+      }
+      page.graphics.drawString('Figures are calculated from records entered for the selected financial period.',
+        smallFont, brush: grey, bounds: Rect.fromLTWH(24, pageSize.height - 27, pageSize.width - 48, 14));
+
+      // Page 2: Cash movement and recorded balance-sheet position.
+      addPage(2);
+      y = 100;
+      y = section(y, 'CASH FLOW SUMMARY');
+      y = line(y, 'Bank receipts recorded', money(bankTotal));
+      y = line(y, 'Vendor payments made', money(paymentTotal));
+      y = line(y, 'Operating expenses recorded', money(expenseTotal));
+      y = line(y, 'Net tracked cash movement', money(bankTotal - paymentTotal - expenseTotal), bold: true);
+      y += 22;
+      y = section(y, 'BALANCE SHEET • RECORDED POSITION');
+      y = line(y, 'Vendor payable / pending balances', money(pending));
+      y = line(y, 'Vendor purchases recorded in period', money(purchases));
+      y = line(y, 'Inventory opening / closing value', 'NOT RECORDED');
+      y = line(y, 'Marketplace receivables / unsettled amount', 'NOT RECORDED');
+      y = line(y, 'Opening bank and cash balances', 'NOT RECORDED');
+      y = line(y, 'Loans and owner capital', 'NOT RECORDED');
+      y += 16;
+      page.graphics.drawRectangle(brush: PdfSolidBrush(PdfColor(245, 247, 250)),
+        bounds: Rect.fromLTWH(24, y, pageSize.width - 48, 54));
+      page.graphics.drawString('IMPORTANT NOTE', PdfStandardFont(PdfFontFamily.helvetica, 8, style: PdfFontStyle.bold),
+        brush: navy, bounds: Rect.fromLTWH(34, y + 8, 150, 12));
+      page.graphics.drawString('This is a recorded-position summary, not a complete statutory balance sheet. Opening balances, inventory, receivables, loans and capital are shown as NOT RECORDED when no entry exists. Vendor purchases are disclosed separately and are not assumed to be cost of goods sold.',
+        smallFont, brush: grey, bounds: Rect.fromLTWH(34, y + 23, pageSize.width - 68, 26));
+      page.graphics.drawString('DIGITECHIFIED BUSINESS MANAGER  •  $_periodLabel',
+        smallFont, brush: grey, bounds: Rect.fromLTWH(24, pageSize.height - 27, pageSize.width - 48, 14));
+
       final bytes = await doc.save();
-      await FileSaver.instance.saveFile(name: 'DIGITECHIFIED_Financial_Report_${selectedFyStart}_${selectedMonth.toString().padLeft(2, '0')}', bytes: Uint8List.fromList(bytes), fileExtension: 'pdf', mimeType: MimeType.pdf);
+      await FileSaver.instance.saveFile(
+        name: 'DIGITECHIFIED_Financial_Report_${selectedFyStart}_${selectedMonth.toString().padLeft(2, '0')}',
+        bytes: Uint8List.fromList(bytes), fileExtension: 'pdf', mimeType: MimeType.pdf);
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('DIGITECHIFIED Financial PDF exported')));
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Financial PDF export failed: $e')));
-    } finally { doc?.dispose(); }
+    } finally {
+      doc?.dispose();
+    }
   }
 
   Future<void> _exportFinancialExcel() async {
