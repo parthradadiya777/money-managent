@@ -228,6 +228,234 @@ class _LoginPageState extends State<LoginPage> {
   );
 }
 
+class AdminHome extends StatefulWidget {
+  const AdminHome({super.key});
+  @override
+  State<AdminHome> createState() => _AdminHomeState();
+}
+
+class _AdminHomeState extends State<AdminHome> {
+  final Box authBox = Hive.box(hiveBoxName);
+  List<Map<String, dynamic>> partners = [];
+  bool loading = true;
+  String? error;
+  CloudSyncService get api => CloudSyncService(token: authBox.get('cloudToken') as String?);
+
+  @override
+  void initState() { super.initState(); _refresh(); }
+
+  Future<void> _refresh() async {
+    setState(() { loading = true; error = null; });
+    try { partners = await api.listPartners(); }
+    catch (e) { error = e.toString().replaceFirst('Exception: ', ''); }
+    finally { if (mounted) setState(() => loading = false); }
+  }
+
+  Future<void> _createPartner() async {
+    final name = TextEditingController();
+    final login = TextEditingController();
+    final password = TextEditingController();
+    final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+      title: const Text('Create Partner Account'),
+      content: SizedBox(width: 440, child: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextField(controller: name, decoration: const InputDecoration(labelText: 'Partner / Business Name')),
+        const SizedBox(height: 10),
+        TextField(controller: login, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Login ID (email)')),
+        const SizedBox(height: 10),
+        TextField(controller: password, obscureText: true, decoration: const InputDecoration(labelText: 'Initial Password (minimum 12 characters)')),
+      ])),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Create Partner')),
+      ],
+    ));
+    if (ok == true) {
+      try {
+        await api.createPartner(name: name.text.trim(), loginId: login.text.trim(), password: password.text);
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Partner account created.')));
+        await _refresh();
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+      }
+    }
+    name.dispose(); login.dispose(); password.dispose();
+  }
+
+  Future<void> _editPartner(Map<String, dynamic> p) async {
+    final name = TextEditingController(text: '${p['name'] ?? ''}');
+    final login = TextEditingController(text: '${p['login_id'] ?? ''}');
+    final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+      title: const Text('Edit Partner'),
+      content: SizedBox(width: 440, child: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextField(controller: name, decoration: const InputDecoration(labelText: 'Partner Name')),
+        const SizedBox(height: 10),
+        TextField(controller: login, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Login ID')),
+      ])),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save Changes')),
+      ],
+    ));
+    if (ok == true) {
+      try { await api.updatePartner('${p['tenant_id']}', {'name': name.text.trim(), 'login_id': login.text.trim()}); await _refresh(); }
+      catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')))); }
+    }
+    name.dispose(); login.dispose();
+  }
+
+  Future<void> _togglePartner(Map<String, dynamic> p) async {
+    final status = p['status'] == 'active' ? 'disabled' : 'active';
+    try { await api.updatePartner('${p['tenant_id']}', {'status': status}); await _refresh(); }
+    catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')))); }
+  }
+
+  Future<void> _resetPassword(Map<String, dynamic> p) async {
+    final password = TextEditingController();
+    final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+      title: Text('Reset password • ${p['name']}'),
+      content: TextField(controller: password, obscureText: true, decoration: const InputDecoration(labelText: 'New password (minimum 12 characters)')),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Reset Password')),
+      ],
+    ));
+    if (ok == true) {
+      try {
+        await api.resetPartnerPassword('${p['tenant_id']}', password.text);
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password updated.')));
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+      }
+    }
+    password.dispose();
+  }
+
+  Future<void> _openPartner(Map<String, dynamic> p) async {
+    try {
+      final result = await api.accessPartner('${p['tenant_id']}');
+      final token = result['access_token'] as String;
+      final tenantId = result['tenant_id'] as String;
+      await authBox.put('cloudAdminToken', authBox.get('cloudToken'));
+      await authBox.put('cloudToken', token);
+      await authBox.put('cloudImpersonating', true);
+      await authBox.put('cloudTenantId', tenantId);
+      await authBox.put('cloudAdminPartnerName', result['partner_name']);
+      await authBox.put('cloudRole', 'super_admin');
+      activeHiveBoxName = '${hiveBoxName}_$tenantId';
+      final partnerBox = await Hive.openBox(activeHiveBoxName);
+      await partnerBox.put('cloudToken', token);
+      await partnerBox.put('cloudTenantId', tenantId);
+      if (!partnerBox.containsKey('Masters')) {
+        await partnerBox.put('Masters', [
+          {'Record Type':'Platform','Name':'Meesho'},
+          {'Record Type':'Platform','Name':'Myntra'},
+          {'Record Type':'Platform','Name':'Flipkart'},
+          {'Record Type':'Platform','Name':'Amazon'},
+          {'Record Type':'Platform','Name':'AJIO'},
+        ]);
+      }
+      if (mounted) Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const BusinessHome()), (route) => false);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+    }
+  }
+
+  Future<void> _logout() async {
+    for (final key in ['cloudToken','cloudAdminToken','cloudImpersonating','cloudTenantId','cloudRole']) {
+      await authBox.delete(key);
+    }
+    activeHiveBoxName = hiveBoxName;
+    if (mounted) Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const BusinessManagerApp()), (route) => false);
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: const Color(0xFFF7F6F2),
+    appBar: AppBar(
+      backgroundColor: const Color(0xFF080808),
+      foregroundColor: Colors.white,
+      title: const Row(children: [BrandMark(size: 34), SizedBox(width: 12), Text('DIGITECHIFIED • SUPER ADMIN', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold))]),
+      actions: [
+        IconButton(tooltip: 'Refresh partners', onPressed: _refresh, icon: const Icon(Icons.refresh)),
+        IconButton(tooltip: 'Logout', onPressed: _logout, icon: const Icon(Icons.logout)),
+      ],
+    ),
+    body: Center(child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 1100),
+      child: Padding(padding: const EdgeInsets.all(22), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Partner Management', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF17233D))),
+            Text('Create and control independent partner workspaces', style: TextStyle(color: Colors.black54, fontSize: 12)),
+          ])),
+          FilledButton.icon(onPressed: _createPartner, icon: const Icon(Icons.add), label: const Text('Add Partner')),
+        ]),
+        const SizedBox(height: 18),
+        Row(children: [
+          Expanded(child: _metric('Total Partners', partners.length.toString(), Icons.groups_2)),
+          const SizedBox(width: 10),
+          Expanded(child: _metric('Active', partners.where((p) => p['status'] == 'active').length.toString(), Icons.verified_user)),
+          const SizedBox(width: 10),
+          Expanded(child: _metric('Disabled', partners.where((p) => p['status'] != 'active').length.toString(), Icons.block)),
+        ]),
+        const SizedBox(height: 18),
+        if (loading) const Expanded(child: Center(child: CircularProgressIndicator()))
+        else if (error != null) Expanded(child: Center(child: Text(error!, textAlign: TextAlign.center)))
+        else if (partners.isEmpty) const Expanded(child: Center(child: Text('No partners created yet. Add the first partner.')))
+        else Expanded(child: ListView.separated(
+          itemCount: partners.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 9),
+          itemBuilder: (ctx, i) {
+            final p = partners[i];
+            final active = p['status'] == 'active';
+            final title = '${p['name'] ?? 'Partner'}';
+            return Card(
+              color: Colors.white, elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: Color(0xFFE8E3D9))),
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                leading: CircleAvatar(backgroundColor: const Color(0xFFFFF4D8), child: Text(title.isNotEmpty ? title[0].toUpperCase() : 'P', style: const TextStyle(color: Color(0xFF9A7116), fontWeight: FontWeight.bold))),
+                title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text('${p['login_id']}  •  ${p['partner_code']}\n${active ? 'Active' : 'Disabled'}', style: const TextStyle(height: 1.5)),
+                isThreeLine: true,
+                trailing: Wrap(mainAxisSize: MainAxisSize.min, children: [
+                  if (active) IconButton(tooltip: 'Open partner workspace', onPressed: () => _openPartner(p), icon: const Icon(Icons.login, color: Color(0xFFB88919))),
+                  PopupMenuButton<String>(
+                    onSelected: (v) {
+                      if (v == 'edit') _editPartner(p);
+                      if (v == 'status') _togglePartner(p);
+                      if (v == 'password') _resetPassword(p);
+                    },
+                    itemBuilder: (_) => [
+                      const PopupMenuItem(value: 'edit', child: Text('Edit partner')),
+                      PopupMenuItem(value: 'status', child: Text(active ? 'Disable partner' : 'Activate partner')),
+                      const PopupMenuItem(value: 'password', child: Text('Reset password')),
+                    ],
+                  ),
+                ]),
+              ),
+            );
+          },
+        )),
+        const SizedBox(height: 8),
+        const Text('Partner staff accounts are disabled. Only Digitechified Admin can create and manage partner logins.', style: TextStyle(fontSize: 11, color: Colors.black54)),
+      ])),
+    )),
+  );
+
+  Widget _metric(String label, String value, IconData icon) => Container(
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(13), border: Border.all(color: const Color(0xFFE8E3D9))),
+    child: Row(children: [
+      Icon(icon, color: const Color(0xFFB88919)), const SizedBox(width: 10),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: const TextStyle(fontSize: 11, color: Colors.black54)),
+        Text(value, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.bold)),
+      ])),
+    ]),
+  );
+}
+
 class BusinessHome extends StatefulWidget {
  const BusinessHome({super.key});
  @override State<BusinessHome> createState()=>_BusinessHomeState();
