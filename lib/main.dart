@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' hide Border;
+import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'dart:math';
 import 'dart:convert';
 import 'package:flutter/services.dart';
@@ -44,13 +45,14 @@ class BusinessManagerApp extends StatelessWidget {
 }
 
 const platforms = ['Meesho', 'Myntra', 'Flipkart', 'Amazon', 'AJIO'];
-const modules = ['Dashboard','Daily Orders','Returns & RTO','Vendor Payments','Bank Received','Expenses'];
+const modules = ['Dashboard','Daily Orders','Returns & RTO','Vendor Payments','Bank Received','Expenses','Financial Reports','Vendor Payment Transactions'];
 const Map<String,List<String>> fields = {
  'Daily Orders':['Date','Platform','Firm / Account','Order ID','SKU / Product','Brand','Size','Color','Orders Qty','Gross Order Value','Delivered Qty','Delivered Sales','Commission / Fees','Shipping Fees','Other Deductions','Courier','AWB / Tracking No.','Customer','Pincode','Source PDF','PDF Page'],
  'Returns & RTO':['Date','RTO / Return','Details'],
  'Vendor Payments':['Month','Firm Name','Vendor Name','Opening Balance','New Amount','Closing Balance','Amount Paid','Payment Date','Payment Mode','Notes'],
  'Bank Received':['Date','Platform','Amount','Details','Brand'],
  'Expenses':['Date','Expense','Details','Payment Mode'],
+ 'Vendor Payment Transactions':['Date','Month','Firm Name','Vendor Name','Amount','Payment Mode','Notes'],
 };
 
 
@@ -199,6 +201,8 @@ class _BusinessHomeState extends State<BusinessHome> {
  static const int _dailyPageSize=100;
  bool _pdfImporting=false;
  int selected=0;
+ int selectedFyStart=DateTime.now().month>=4?DateTime.now().year:DateTime.now().year-1;
+ int selectedMonth=0;
  String? _syncMessage;
  String money(num n)=>'₹${n.toStringAsFixed(2)}';
  List<Map> rows(String key){final raw=box.get(key,defaultValue:<dynamic>[]);final result=(raw as List).map((e)=>Map<String,dynamic>.from(e as Map)).toList();if(key=='Daily Orders'){for(final row in result){if('${row['Platform']??''}'.toLowerCase()=='myntra'){row['Brand']='JIPROSTORE';for(final field in ['Date','Firm / Account','Order ID']){if('${row[field]??''}'.trim().isEmpty)row[field]=field=='Date'?'Not detected':field=='Order ID'?(row['AWB / Tracking No.']??'Not detected'):'Not detected';}}}}return result;}
@@ -271,7 +275,7 @@ class _BusinessHomeState extends State<BusinessHome> {
   final wide=MediaQuery.of(context).size.width>850;
   return Scaffold(body:Row(children:[
    if(wide)_sideNav(),
-   Expanded(child:Column(children:[_topBar(),Expanded(child:selected==0?_dashboard():_modulePage(modules[selected])),if(!wide)_bottomNav()])),
+   Expanded(child:Column(children:[_topBar(),_periodFilterBar(),Expanded(child:selected==0?_dashboard():selected==6?_financialReportsPage():_modulePage(modules[selected])),if(!wide)_bottomNav()])),
   ]));
  }
  Widget _sideNav()=>Container(width:235,color:const Color(0xFF080808),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
@@ -282,7 +286,7 @@ class _BusinessHomeState extends State<BusinessHome> {
   ])),
   const Divider(color:Color(0xFF333333)),
   Expanded(child:ListView.builder(itemCount:modules.length,itemBuilder:(c,i){
-   final icons=[Icons.dashboard_rounded,Icons.shopping_bag,Icons.assignment_return,Icons.payments,Icons.account_balance,Icons.receipt_long,Icons.settings];
+   final icons=[Icons.dashboard_rounded,Icons.shopping_bag,Icons.assignment_return,Icons.payments,Icons.account_balance,Icons.receipt_long,Icons.assessment,Icons.payment];
    final active=selected==i;
    return ListTile(dense:true,selected:active,selectedTileColor:const Color(0xFF292313),leading:Icon(icons[i],color:active?const Color(0xFFFFC84D):const Color(0xFFB9B9B9),size:19),
     title:Text(modules[i],style:TextStyle(color:active?Colors.white:const Color(0xFFB9C7E5),fontSize:13,fontWeight:active?FontWeight.w600:FontWeight.normal)),onTap:()=>setState(()=>selected=i));
@@ -328,13 +332,27 @@ class _BusinessHomeState extends State<BusinessHome> {
   ])));
   if(choice!=null&&mounted)setState(()=>selected=choice);
  }
+
+  String _fyLabel(int y)=>'$y-${(y+1).toString().substring(2)}';
+  DateTime? _dateOf(Map r){final v=(r['Month']??r['Date']??r['Payment Date']??'').toString().trim();if(v.isEmpty||v.toLowerCase().contains('not detected'))return null;return DateTime.tryParse(v.length==7?'$v-01':v);}
+  List<Map> _periodRows(String module)=>rows(module).where((r){final d=_dateOf(r);if(d==null)return selectedMonth==0;final fy=d.month>=4?d.year:d.year-1;return fy==selectedFyStart&&(selectedMonth==0||d.month==selectedMonth);}).toList();
+  String get _periodLabel=>selectedMonth==0?'FY ${_fyLabel(selectedFyStart)}':'${['','January','February','March','April','May','June','July','August','September','October','November','December'][selectedMonth]} ${selectedFyStart+(selectedMonth>=4?0:1)}';
+  Widget _periodFilterBar(){final years=<int>{selectedFyStart,DateTime.now().month>=4?DateTime.now().year:DateTime.now().year-1};for(final m in fields.keys){for(final r in rows(m)){final d=_dateOf(r);if(d!=null)years.add(d.month>=4?d.year:d.year-1);}}final sorted=years.toList()..sort((a,b)=>b.compareTo(a));return Container(color:const Color(0xFFF7F6F2),padding:const EdgeInsets.symmetric(horizontal:16,vertical:5),child:Row(children:[const Icon(Icons.calendar_month,color:Color(0xFF9B7417),size:18),const SizedBox(width:6),const Text('FY',style:TextStyle(fontSize:11)),DropdownButton<int>(value:selectedFyStart,isDense:true,underline:const SizedBox(),items:sorted.map((y)=>DropdownMenuItem(value:y,child:Text(_fyLabel(y)))).toList(),onChanged:(v){if(v!=null)setState(()=>selectedFyStart=v);}),const SizedBox(width:10),const Text('Month',style:TextStyle(fontSize:11)),DropdownButton<int>(value:selectedMonth,isDense:true,underline:const SizedBox(),items:[const DropdownMenuItem(value:0,child:Text('All Months')),...List.generate(12,(i)=>DropdownMenuItem(value:i+1,child:Text(['January','February','March','April','May','June','July','August','September','October','November','December'][i])))],onChanged:(v){if(v!=null)setState(()=>selectedMonth=v);}),const Spacer(),Text(_periodLabel,style:const TextStyle(fontSize:11,color:Color(0xFF8A6818),fontWeight:FontWeight.bold))]));}
+  num _total(List<Map> data,String field)=>data.fold<num>(0,(v,r)=>v+(num.tryParse('${r[field]??0}'.replaceAll(',',''))??0));
+  Widget _financialReportsPage(){final o=_periodRows('Daily Orders'),ret=_periodRows('Returns & RTO'),v=_periodRows('Vendor Payments'),b=_periodRows('Bank Received'),e=_periodRows('Expenses'),p=_periodRows('Vendor Payment Transactions');final sales=_total(o,'Delivered Sales'),fees=_total(o,'Commission / Fees')+_total(o,'Shipping Fees')+_total(o,'Other Deductions'),expenses=_total(e,'Expense'),bank=_total(b,'Amount'),paid=_total(p,'Amount'),purchase=_total(v,'New Amount');final returns=ret.where((r)=>'${r['RTO / Return']??''}'.toLowerCase()=='return').fold<num>(0,(x,r)=>x+(num.tryParse('${r['Details']??0}')??0));final rto=ret.where((r)=>'${r['RTO / Return']??''}'.toLowerCase()=='rto').fold<num>(0,(x,r)=>x+(num.tryParse('${r['Details']??0}')??0));Widget line(String k,num n)=>Padding(padding:const EdgeInsets.symmetric(vertical:6),child:Row(children:[Expanded(child:Text(k)),Text(money(n),style:const TextStyle(fontWeight:FontWeight.w600))]));return ListView(padding:const EdgeInsets.all(20),children:[Row(children:[const Expanded(child:Text('Financial Reports',style:TextStyle(fontSize:21,fontWeight:FontWeight.bold))),OutlinedButton.icon(onPressed:_exportFinancialExcel,icon:const Icon(Icons.table_view),label:const Text('Excel')),const SizedBox(width:7),FilledButton.icon(onPressed:_exportFinancialPdf,icon:const Icon(Icons.picture_as_pdf),label:const Text('PDF'))]),Text(_periodLabel,style:const TextStyle(color:Colors.black54)),const SizedBox(height:12),Wrap(spacing:9,runSpacing:9,children:[_reportMetric('Parcels / Orders',_total(o,'Orders Qty')), _reportMetric('Delivered',_total(o,'Delivered Qty')),_reportMetric('Returns',returns),_reportMetric('RTO',rto)]),const SizedBox(height:12),Card(color:Colors.white,child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Text('PROFIT & LOSS SUMMARY',style:TextStyle(fontWeight:FontWeight.bold)),const Divider(),line('Delivered Sales Revenue',sales),line('Marketplace Fees & Deductions',fees),line('Operating Expenses',expenses),const Divider(),line('Operating Result before inventory cost',sales-fees-expenses),line('Vendor Purchases (shown separately)',purchase),const Text('Inventory opening/closing value is not yet recorded, so purchases are not treated as Cost of Goods Sold.',style:TextStyle(color:Colors.deepOrange,fontSize:11))]))),const SizedBox(height:12),Card(color:Colors.white,child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Text('BALANCE & CASH MOVEMENT',style:TextStyle(fontWeight:FontWeight.bold)),const Divider(),line('Bank Receipts Recorded',bank),line('Vendor Payments',paid),line('Operating Expenses',expenses),line('Net Tracked Cash Movement',bank-paid-expenses),const Text('Full balance sheet needs opening cash/bank, inventory, receivables, loans and capital. These will not be guessed.',style:TextStyle(color:Colors.deepOrange,fontSize:11))])))]);}
+  Widget _reportMetric(String title,num value)=>Container(width:175,padding:const EdgeInsets.all(13),decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(12)),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(title,style:const TextStyle(fontSize:11,color:Colors.black54)),Text(value.toStringAsFixed(0),style:const TextStyle(fontSize:20,fontWeight:FontWeight.bold))]));
+  List<String> _reportLines(){final o=_periodRows('Daily Orders'),e=_periodRows('Expenses'),b=_periodRows('Bank Received'),p=_periodRows('Vendor Payment Transactions'),v=_periodRows('Vendor Payments');final sales=_total(o,'Delivered Sales'),fees=_total(o,'Commission / Fees')+_total(o,'Shipping Fees')+_total(o,'Other Deductions'),expense=_total(e,'Expense');return ['DIGITECHIFIED BUSINESS MANAGER','FINANCIAL REPORT • $_periodLabel','','PROFIT & LOSS','Delivered Sales: ${money(sales)}','Marketplace Fees & Deductions: ${money(fees)}','Operating Expenses: ${money(expense)}','Operating Result before inventory cost: ${money(sales-fees-expense)}','Vendor Purchases: ${money(_total(v,'New Amount'))}','','CASH MOVEMENT','Bank Receipts: ${money(_total(b,'Amount'))}','Vendor Payments: ${money(_total(p,'Amount'))}','Operating Expenses: ${money(expense)}','Net Tracked Cash Movement: ${money(_total(b,'Amount')-_total(p,'Amount')-expense)}','Parcels / Orders: ${_total(o,'Orders Qty')}','Delivered Qty: ${_total(o,'Delivered Qty')}','Prepared by DIGITECHIFIED'];}
+  Future<void> _exportFinancialPdf()async{PdfDocument? d;try{d=PdfDocument();PdfPage? page;var y=0.0;final f=PdfStandardFont(PdfFontFamily.helvetica,10),h=PdfStandardFont(PdfFontFamily.helvetica,15,style:PdfFontStyle.bold);for(final line in _reportLines()){if(page==null||y>page.getClientSize().height-30){page=d.pages.add();y=24;}page.graphics.drawString(line.isEmpty?' ':line,line.startsWith('DIGITECHIFIED')||line.startsWith('FINANCIAL')?h:f,bounds:Rect.fromLTWH(24,y,540,20));y+=22;}final bytes=await d.save();await FilePicker.platform.saveFile(fileName:'DIGITECHIFIED_Financial_Report_${selectedFyStart}_${selectedMonth.toString().padLeft(2,'0')}.pdf',bytes:Uint8List.fromList(bytes));}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('PDF export failed: $e')));}finally{d?.dispose();}}
+  Future<void> _exportFinancialExcel()async{try{final book=Excel.createExcel(),sheet=book['DIGITECHIFIED Report'];sheet.appendRow([TextCellValue('DIGITECHIFIED BUSINESS MANAGER')]);sheet.appendRow([TextCellValue('Financial Report • $_periodLabel')]);sheet.appendRow([TextCellValue('Report Item'),TextCellValue('Value')]);for(final line in _reportLines().skip(3)){if(line.isEmpty)continue;final p=line.split(': ');sheet.appendRow([TextCellValue(p.first),TextCellValue(p.length>1?p.sublist(1).join(': '):'')]);}final bytes=book.encode();if(bytes!=null)await FilePicker.platform.saveFile(fileName:'DIGITECHIFIED_Financial_Report_${selectedFyStart}_${selectedMonth.toString().padLeft(2,'0')}.xlsx',bytes:Uint8List.fromList(bytes));}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Excel export failed: $e')));}}
+  Future<void> _exportPdf(String module)async{PdfDocument? d;try{final data=_periodRows(module),cols=fields[module]??[];d=PdfDocument();final page=d.pages.add(),f=PdfStandardFont(PdfFontFamily.helvetica,8),h=PdfStandardFont(PdfFontFamily.helvetica,14,style:PdfFontStyle.bold);page.graphics.drawString('DIGITECHIFIED BUSINESS MANAGER',h,bounds:const Rect.fromLTWH(20,18,550,22));page.graphics.drawString('$module • $_periodLabel',f,bounds:const Rect.fromLTWH(20,42,550,18));var y=68.0;for(final line in [cols.join(' | '),...data.map((r)=>cols.map((c)=>'${r[c]??''}').join(' | '))]){if(y>page.getClientSize().height-20)break;page.graphics.drawString(line.length>150?'${line.substring(0,147)}...':line,f,bounds:Rect.fromLTWH(20,y,550,18));y+=17;}final bytes=await d.save();await FilePicker.platform.saveFile(fileName:'DIGITECHIFIED_${module.replaceAll(' ','_')}_${selectedFyStart}_${selectedMonth.toString().padLeft(2,'0')}.pdf',bytes:Uint8List.fromList(bytes));}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('PDF export failed: $e')));}finally{d?.dispose();}}
+
  Widget _dashboard(){
-  final orderRows=rows('Daily Orders');
+  final orderRows=_periodRows('Daily Orders');
   final orderQty=orderRows.fold<num>(0,(v,e)=>v+(num.tryParse('${e['Orders Qty']??0}')??0));
-  final returnRows=rows('Returns & RTO');
+  final returnRows=_periodRows('Returns & RTO');
   final returnQty=returnRows.where((e)=>'${e['RTO / Return']??''}'.toLowerCase()=='return').fold<num>(0,(v,e)=>v+(num.tryParse('${e['Details']??0}')??0));
   final rtoQty=returnRows.where((e)=>'${e['RTO / Return']??''}'.toLowerCase()=='rto').fold<num>(0,(v,e)=>v+(num.tryParse('${e['Details']??0}')??0));
-  final vendorRows=rows('Vendor Payments');
+  final vendorRows=_periodRows('Vendor Payments');
   final latestVendorRows=<String,Map>{};
   for(final row in vendorRows){
    final vendor='${row['Vendor Name']??''}'.trim().toLowerCase();
@@ -348,9 +366,9 @@ class _BusinessHomeState extends State<BusinessHome> {
    final n=num.tryParse('${e['Closing Balance']??e['Pending Amount']??e['Amount Paid']??0}'.replaceAll(',',''))??0;
    return v+(n>0?n:0);
   });
-  final bankRows=rows('Bank Received');
+  final bankRows=_periodRows('Bank Received');
   final bankReceived=bankRows.fold<num>(0,(v,e)=>v+(num.tryParse('${e['Amount']??e['Bank Received']??e['Credit']??0}'.replaceAll(',',''))??0));
-  final expenseRows=rows('Expenses');
+  final expenseRows=_periodRows('Expenses');
   final expenseTotal=expenseRows.fold<num>(0,(v,e)=>v+(num.tryParse('${e['Expense']??0}'.replaceAll(',',''))??0));
   final recentReturns=returnRows.reversed.take(2).toList();
   final recentBank=bankRows.reversed.take(2).toList();
@@ -424,7 +442,7 @@ class _BusinessHomeState extends State<BusinessHome> {
  Widget _action(String label,IconData icon,int page)=>OutlinedButton.icon(onPressed:()=>setState(()=>selected=page),icon:Icon(icon,size:17),label:Text(label));
 
  Widget _modulePage(String module){
-  final allData=rows(module),cols=fields[module]??[];
+  final allData=_periodRows(module),cols=fields[module]??[];
   final isDaily=module=='Daily Orders';
   final query=isDaily?_dailySearchController.text.trim().toLowerCase():'';
   final filtered=isDaily&&query.isNotEmpty
@@ -452,10 +470,9 @@ class _BusinessHomeState extends State<BusinessHome> {
    const SizedBox(height:14),
    Wrap(spacing:10,runSpacing:10,children:[
     FilledButton.icon(onPressed:()=>_addRecord(module),icon:const Icon(Icons.add),label:const Text('Add Manually')),
-    if(!isDaily&&module!='Vendor Payments'&&module!='Expenses'&&module!='Returns & RTO'&&module!='Bank Received')...[
-     OutlinedButton.icon(onPressed:()=>_importExcel(module),icon:const Icon(Icons.file_upload_outlined),label:const Text('Import Excel')),
-     OutlinedButton.icon(onPressed:()=>_exportExcel(module),icon:const Icon(Icons.file_download_outlined),label:const Text('Export Excel')),
-    ],
+    if(!isDaily&&module!='Vendor Payment Transactions')OutlinedButton.icon(onPressed:()=>_importExcel(module),icon:const Icon(Icons.file_upload_outlined),label:const Text('Import Excel')),
+    OutlinedButton.icon(onPressed:()=>_exportExcel(module),icon:const Icon(Icons.file_download_outlined),label:const Text('Export Excel')),
+    OutlinedButton.icon(onPressed:()=>_exportPdf(module),icon:const Icon(Icons.picture_as_pdf_outlined),label:const Text('Export PDF')), 
     if(isDaily)FilledButton.icon(onPressed:_pdfImporting?null:()=>_importShippingPdf(),icon:_pdfImporting?const SizedBox(width:16,height:16,child:CircularProgressIndicator(strokeWidth:2,color:Colors.white)):const Icon(Icons.picture_as_pdf_outlined),label:Text(_pdfImporting?'Importing PDF...':'Upload Shipping Label PDF')),
    ]),
    const SizedBox(height:16),
@@ -844,6 +861,8 @@ class _BusinessHomeState extends State<BusinessHome> {
     updated['_paymentHistory']=[history,"₹${paidNow.toStringAsFixed(2)} • $stamp${noteController.text.trim().isEmpty?'':' • ${noteController.text.trim()}'}"].where((v)=>v.isNotEmpty).join('\\n');
     list[index]=updated;
     await saveRows('Vendor Payments',list);
+    final paymentRows=rows('Vendor Payment Transactions')..add({'Date':stamp,'Month':'${now.year}-${now.month.toString().padLeft(2,'0')}','Firm Name':row['Firm Name']??'','Vendor Name':row['Vendor Name']??'','Amount':paidNow.toStringAsFixed(2),'Payment Mode':'Not specified','Notes':noteController.text.trim(),'_syncId':_newSyncId()});
+    await saveRows('Vendor Payment Transactions',paymentRows);
     if(mounted){setState((){});ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Payment saved. Remaining pending: ₹${(pending-paidNow).toStringAsFixed(2)}')));}
    }
   }
