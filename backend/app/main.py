@@ -147,6 +147,7 @@ def login(data: LoginIn, db: Session = Depends(get_db)):
         "business_name": tenant.name if tenant else "",
         "role": user.role,
         "login_id": user.email,
+        "tenant_id": str(user.tenant_id),
     }
 
 
@@ -158,6 +159,7 @@ def me(user: Principal = Depends(current_user), db: Session = Depends(get_db)):
         "role": user.role,
         "business_name": tenant.name if tenant else "",
         "impersonating": user.impersonating,
+        "tenant_id": str(user.tenant_id),
     }
 
 
