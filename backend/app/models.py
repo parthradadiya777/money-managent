@@ -70,3 +70,10 @@ class AdminAccessLog(Base):
     action: Mapped[str] = mapped_column(String(40), nullable=False)
     details: Mapped[str] = mapped_column(Text, default="", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, nullable=False)
+
+
+
+class UserSecurity(Base):
+    __tablename__ = "user_security"
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    tokens_valid_after: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, nullable=False)
