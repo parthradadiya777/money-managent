@@ -469,7 +469,7 @@ class _BusinessHomeState extends State<BusinessHome> {
     ])),FilledButton.icon(onPressed:_quickAdd,icon:const Icon(Icons.add,size:18),label:const Text('Quick Entry'))]),
     SizedBox(height:compact?10:16),
     Expanded(flex:5,child:LayoutBuilder(builder:(context,c){
-     final count=c.maxWidth>1000?3:(c.maxWidth>560?3:2);
+     final count=c.maxWidth>1200?4:(c.maxWidth>560?3:2);
      final cardHeight=compact?78.0:92.0;
      final deliveredQty=(orderQty-returnQty-rtoQty).clamp(0,double.infinity);
      final cards=[
