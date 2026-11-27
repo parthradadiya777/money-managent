@@ -572,11 +572,11 @@ class _BusinessHomeState extends State<BusinessHome> {
         ['Bank receipts', money(bankTotal)], ['Vendor payments', money(paymentTotal)], ['Operating expenses', money(expenseTotal)],
         ['Net tracked cash movement', money(bankTotal - paymentTotal - expenseTotal)]
       ]);
-      makeTable('Daily Orders', fields['Daily Orders']!, o.map((r) => fields['Daily Orders']!.map((c) => '${r[c] ?? ''}')).toList());
-      makeTable('Returns & RTO', fields['Returns & RTO']!, ret.map((r) => fields['Returns & RTO']!.map((c) => '${r[c] ?? ''}')).toList());
-      makeTable('Bank Received', fields['Bank Received']!, bank.map((r) => fields['Bank Received']!.map((c) => '${r[c] ?? ''}')).toList());
-      makeTable('Expenses', fields['Expenses']!, expenses.map((r) => fields['Expenses']!.map((c) => '${r[c] ?? ''}')).toList());
-      makeTable('Vendor Payments', fields['Vendor Payment Transactions']!, payments.map((r) => fields['Vendor Payment Transactions']!.map((c) => '${r[c] ?? ''}')).toList());
+      makeTable('Daily Orders', fields['Daily Orders']!, o.map((r) => fields['Daily Orders']!.map((c) => '${r[c] ?? ''}').toList()).toList());
+      makeTable('Returns & RTO', fields['Returns & RTO']!, ret.map((r) => fields['Returns & RTO']!.map((c) => '${r[c] ?? ''}').toList()).toList());
+      makeTable('Bank Received', fields['Bank Received']!, bank.map((r) => fields['Bank Received']!.map((c) => '${r[c] ?? ''}').toList()).toList());
+      makeTable('Expenses', fields['Expenses']!, expenses.map((r) => fields['Expenses']!.map((c) => '${r[c] ?? ''}').toList()).toList());
+      makeTable('Vendor Payments', fields['Vendor Payment Transactions']!, payments.map((r) => fields['Vendor Payment Transactions']!.map((c) => '${r[c] ?? ''}').toList()).toList());
       final bytes = book.encode();
       if (bytes == null) throw Exception('Excel workbook could not be generated');
       await FileSaver.instance.saveFile(name: 'DIGITECHIFIED_Financial_Report_${selectedFyStart}_${selectedMonth.toString().padLeft(2, '0')}', bytes: Uint8List.fromList(bytes), fileExtension: 'xlsx', mimeType: MimeType.microsoftExcel);
