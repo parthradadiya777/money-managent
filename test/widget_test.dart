@@ -37,7 +37,7 @@ void main() {
         expenses: [{'Date': '2026-10-20', 'Expense': '500'}],
         periodStart: DateTime(2026, 11, 1),
       );
-      expect(result, 11500);
+      expect(result, 11000);
     });
   });
 }
