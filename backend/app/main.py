@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from .config import settings
 from .database import Base, engine, get_db
 from .models import Tenant, User, Partner, BusinessRecord, AuditLog, AdminAccessLog
-from .schemas import LoginIn, PartnerCreateIn, PartnerUpdateIn, PasswordResetIn, RecordIn, RecordBatchIn
+from .schemas import RegisterIn, LoginIn, PartnerCreateIn, PartnerUpdateIn, PasswordResetIn, RecordIn, RecordBatchIn
 from .security import hash_password, verify_password, create_access_token, decode_access_token
 
 Base.metadata.create_all(bind=engine)
@@ -129,15 +129,13 @@ def health():
 
 
 @app.post("/api/auth/register")
-def register_test_partner(data: LoginIn, business_name: str = "", db: Session = Depends(get_db)):
+def register_test_partner(data: RegisterIn, db: Session = Depends(get_db)):
     # Synthetic-only self-registration is retained for the isolated CI test service.
     if settings.app_env.lower() != "test":
         raise HTTPException(status_code=403, detail="Public registration is disabled. Contact Digitechified Admin.")
-    if len(business_name.strip()) < 2:
-        raise HTTPException(status_code=422, detail="Test business name is required")
     if db.scalar(select(User).where(User.email == data.email.lower())):
         raise HTTPException(status_code=409, detail="Email already registered")
-    tenant = Tenant(name=business_name.strip())
+    tenant = Tenant(name=data.business_name.strip())
     db.add(tenant)
     db.flush()
     user = User(tenant_id=tenant.id, email=data.email.lower(), password_hash=hash_password(data.password), role="partner")
@@ -145,7 +143,6 @@ def register_test_partner(data: LoginIn, business_name: str = "", db: Session = 
     db.add_all([user, partner])
     db.commit()
     return {"access_token": create_access_token(str(user.id), str(tenant.id)), "token_type": "bearer", "business_name": tenant.name, "role": user.role, "tenant_id": str(tenant.id)}
-
 
 @app.post("/api/auth/login")
 def login(data: LoginIn, db: Session = Depends(get_db)):
