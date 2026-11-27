@@ -16,6 +16,7 @@ Uint8List? brandLogoBytes;
 
 const bool isTestEnvironment = String.fromEnvironment('APP_ENV') == 'test';
 const String hiveBoxName = isTestEnvironment ? 'business_manager_test' : 'business_manager';
+String activeHiveBoxName = hiveBoxName;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -76,116 +77,152 @@ class AuthGate extends StatefulWidget {
   @override
   State<AuthGate> createState() => _AuthGateState();
 }
-
 class _AuthGateState extends State<AuthGate> {
-  final Box box = Hive.box(hiveBoxName);
+  final Box authBox = Hive.box(hiveBoxName);
+  bool loading = true;
+  String? role;
+  String? error;
+  @override
+  void initState() { super.initState(); _restoreSession(); }
+  Future<void> _restoreSession() async {
+    final token = authBox.get('cloudToken') as String?;
+    if (!CloudSyncService.configured) {
+      activeHiveBoxName = hiveBoxName;
+      if (mounted) setState(() { loading = false; role = 'local'; });
+      return;
+    }
+    if (token == null || token.isEmpty) {
+      activeHiveBoxName = hiveBoxName;
+      if (mounted) setState(() { loading = false; role = null; });
+      return;
+    }
+    try {
+      if (authBox.get('cloudImpersonating') == true) {
+        final tenantId = '${authBox.get('cloudTenantId') ?? ''}';
+        if (tenantId.isEmpty) throw Exception('Partner session is missing its workspace.');
+        await _openPartnerBox(tenantId, token);
+        if (mounted) setState(() { loading = false; role = 'impersonating'; error = null; });
+        return;
+      }
+      final me = await CloudSyncService(token: token).fetchMe();
+      final accountRole = '${me['role'] ?? 'partner'}';
+      if (accountRole == 'super_admin') {
+        activeHiveBoxName = hiveBoxName;
+      } else {
+        await _openPartnerBox('${me['tenant_id']}', token);
+      }
+      if (mounted) setState(() { loading = false; role = accountRole; error = null; });
+    } catch (e) {
+      if (mounted) setState(() { loading = false; error = e.toString().replaceFirst('Exception: ', ''); });
+    }
+  }
+  Future<void> _openPartnerBox(String tenantId, String token) async {
+    activeHiveBoxName = '${hiveBoxName}_$tenantId';
+    final partnerBox = await Hive.openBox(activeHiveBoxName);
+    await partnerBox.put('cloudToken', token);
+    await partnerBox.put('cloudTenantId', tenantId);
+    if (!partnerBox.containsKey('Masters')) {
+      await partnerBox.put('Masters', [
+        {'Record Type':'Platform','Name':'Meesho'},
+        {'Record Type':'Platform','Name':'Myntra'},
+        {'Record Type':'Platform','Name':'Flipkart'},
+        {'Record Type':'Platform','Name':'Amazon'},
+        {'Record Type':'Platform','Name':'AJIO'},
+      ]);
+    }
+  }
+  Future<void> _onAuthenticated(String token, String accountRole) async {
+    await authBox.put('cloudToken', token);
+    await authBox.put('cloudRole', accountRole);
+    await authBox.delete('cloudImpersonating');
+    if (accountRole == 'super_admin') {
+      activeHiveBoxName = hiveBoxName;
+    } else {
+      final me = await CloudSyncService(token: token).fetchMe();
+      await _openPartnerBox('${me['tenant_id']}', token);
+    }
+    if (mounted) setState(() { role = accountRole; loading = false; error = null; });
+  }
   @override
   Widget build(BuildContext context) {
     if (!CloudSyncService.configured) return const BusinessHome();
-    final token = box.get('cloudToken') as String?;
-    if (token == null || token.isEmpty) {
-      return LoginPage(onAuthenticated: (value) async {
-        await box.put('cloudToken', value);
-        if (mounted) setState(() {});
-      });
-    }
+    if (loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (error != null) return Scaffold(body: Center(child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const BrandMark(size: 54), const SizedBox(height: 16),
+        Text(error!, textAlign: TextAlign.center), const SizedBox(height: 12),
+        FilledButton(onPressed: () { setState(() { loading = true; error = null; }); _restoreSession(); }, child: const Text('Retry')),
+        TextButton(onPressed: () async {
+          await authBox.delete('cloudToken');
+          await authBox.delete('cloudAdminToken');
+          await authBox.delete('cloudImpersonating');
+          if (mounted) setState(() { role = null; error = null; });
+        }, child: const Text('Sign in again')),
+      ]),
+    )));
+    if (role == null) return LoginPage(onAuthenticated: _onAuthenticated);
+    if (role == 'super_admin') return const AdminHome();
     return const BusinessHome();
   }
 }
 
 class LoginPage extends StatefulWidget {
-  final Future<void> Function(String token) onAuthenticated;
+  final Future<void> Function(String token, String role) onAuthenticated;
   const LoginPage({super.key, required this.onAuthenticated});
   @override
   State<LoginPage> createState() => _LoginPageState();
 }
-
 class _LoginPageState extends State<LoginPage> {
   final email = TextEditingController();
   final password = TextEditingController();
-  final business = TextEditingController();
-  bool register = false;
   bool busy = false;
   bool obscure = true;
   String? error;
-
   Future<void> submit() async {
-    if (email.text.trim().isEmpty || password.text.isEmpty ||
-        (register && business.text.trim().isEmpty)) {
-      setState(() => error = 'Please fill all required fields.');
+    if (email.text.trim().isEmpty || password.text.isEmpty) {
+      setState(() => error = 'Please enter your Login ID and password.');
       return;
     }
     setState(() { busy = true; error = null; });
     try {
       final result = await CloudSyncService().authenticate(
-        email: email.text.trim(),
-        password: password.text,
-        businessName: business.text.trim(),
-        register: register,
+        email: email.text.trim(), password: password.text, register: false,
       );
-      await widget.onAuthenticated(result['access_token'] as String);
+      await widget.onAuthenticated(result['access_token'] as String, '${result['role'] ?? 'partner'}');
     } catch (e) {
       setState(() => error = e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => busy = false);
     }
   }
-
   @override
-  void dispose() {
-    email.dispose(); password.dispose(); business.dispose();
-    super.dispose();
-  }
-
+  void dispose() { email.dispose(); password.dispose(); super.dispose(); }
   @override
   Widget build(BuildContext context) => Scaffold(
     body: Center(child: SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 440),
-        child: Card(
-          color: Colors.white,
-          elevation: 1,
-          child: Padding(
-            padding: const EdgeInsets.all(28),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              const BrandMark(size: 62),
-              const SizedBox(height: 14),
-              const Text('DIGITECHIFIED', textAlign: TextAlign.center,
-                style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.4)),
-              const SizedBox(height: 4),
-              const Text('Business Manager', textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 24),
-              if (register) ...[
-                TextField(controller: business, decoration: const InputDecoration(labelText: 'Business / Firm Name')),
-                const SizedBox(height: 12),
-              ],
-              TextField(controller: email, keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(labelText: 'Email')),
-              const SizedBox(height: 12),
-              TextField(controller: password, obscureText: obscure,
-                decoration: InputDecoration(labelText: 'Password',
-                  helperText: register ? 'Use at least 12 characters' : null,
-                  suffixIcon: IconButton(icon: Icon(obscure ? Icons.visibility : Icons.visibility_off),
-                    onPressed: () => setState(() => obscure = !obscure)))),
-              if (error != null) ...[
-                const SizedBox(height: 12),
-                Text(error!, style: const TextStyle(color: Colors.red)),
-              ],
-              const SizedBox(height: 18),
-              FilledButton(
-                onPressed: busy ? null : submit,
-                child: Padding(padding: const EdgeInsets.all(12),
-                  child: Text(busy ? 'Please wait...' : register ? 'Create Business Account' : 'Login')),
-              ),
-              TextButton(
-                onPressed: busy ? null : () => setState(() { register = !register; error = null; }),
-                child: Text(register ? 'Already registered? Login' : 'New business? Create account'),
-              ),
-            ]),
-          ),
-        ),
+        child: Card(color: Colors.white, elevation: 1, child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            const BrandMark(size: 62), const SizedBox(height: 14),
+            const Text('DIGITECHIFIED', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.4)),
+            const SizedBox(height: 4),
+            const Text('Business Manager', textAlign: TextAlign.center, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 24),
+            TextField(controller: email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Login ID')),
+            const SizedBox(height: 12),
+            TextField(controller: password, obscureText: obscure, decoration: InputDecoration(labelText: 'Password',
+              suffixIcon: IconButton(icon: Icon(obscure ? Icons.visibility : Icons.visibility_off), onPressed: () => setState(() => obscure = !obscure)))),
+            if (error != null) ...[const SizedBox(height: 12), Text(error!, style: const TextStyle(color: Colors.red))],
+            const SizedBox(height: 18),
+            FilledButton(onPressed: busy ? null : submit, child: Padding(padding: const EdgeInsets.all(12), child: Text(busy ? 'Please wait...' : 'Secure Login'))),
+            const SizedBox(height: 8),
+            const Text('Partner accounts are created by Digitechified Admin.', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: Colors.black54)),
+          ]),
+        )),
       ),
     )),
   );
@@ -196,7 +233,7 @@ class BusinessHome extends StatefulWidget {
  @override State<BusinessHome> createState()=>_BusinessHomeState();
 }
 class _BusinessHomeState extends State<BusinessHome> {
- final Box box=Hive.box(hiveBoxName);
+ final Box box=Hive.box(activeHiveBoxName);
  final TextEditingController _dailySearchController=TextEditingController();
  int _dailyPage=0;
  static const int _dailyPageSize=100;
