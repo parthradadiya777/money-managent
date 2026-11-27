@@ -361,7 +361,7 @@ class _AdminHomeState extends State<AdminHome> {
   }
 
   Future<void> _logout() async {
-    for (final key in ['cloudToken','cloudAdminToken','cloudImpersonating','cloudTenantId','cloudRole']) {
+    for (final key in ['cloudToken','cloudAdminToken','cloudImpersonating','cloudTenantId','cloudAdminPartnerName','cloudRole']) {
       await authBox.delete(key);
     }
     activeHiveBoxName = hiveBoxName;
@@ -588,7 +588,9 @@ class _BusinessHomeState extends State<BusinessHome> {
   if(MediaQuery.of(context).size.width<=850)const Icon(Icons.menu_rounded,color:Color(0xFF263B67)),
   const SizedBox(width:8),Expanded(child:Text(selected==0?'Business Overview':_moduleTitle(modules[selected]),style:const TextStyle(fontSize:19,fontWeight:FontWeight.bold,color:Color(0xFF17233D)))),
   Chip(avatar:Icon(Icons.circle,size:9,color:_syncMessage=='Cloud synced'?Colors.green:Colors.orange),
-   label:Text(_syncMessage ?? (box.get('cloudToken') != null ? 'Cloud sync' : 'Local data'))),
+   label:Text(Hive.box(hiveBoxName).get('cloudAdminPartnerName') != null
+    ? 'Admin Mode • ${Hive.box(hiveBoxName).get('cloudAdminPartnerName')}'
+    : (_syncMessage ?? (box.get('cloudToken') != null ? 'Cloud sync' : 'Local data')))),
   if (CloudSyncService.configured && box.get('cloudToken') != null)
    IconButton(tooltip:'Sync now', onPressed:_syncOnStart, icon:const Icon(Icons.sync)),
   if (Hive.box(hiveBoxName).get('cloudAdminToken') != null)
