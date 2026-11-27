@@ -18,7 +18,8 @@ def verify_password(password: str, password_hash: str) -> bool:
 def create_access_token(user_id: str, tenant_id: str, *, expires_minutes: int | None = None, impersonating: bool = False) -> str:
     duration = expires_minutes if expires_minutes is not None else settings.jwt_expire_minutes
     expires = datetime.now(timezone.utc) + timedelta(minutes=duration)
-    claims = {"sub": user_id, "tid": tenant_id, "exp": expires}
+    now = datetime.now(timezone.utc)
+    claims = {"sub": user_id, "tid": tenant_id, "iat": int(now.timestamp()), "exp": expires}
     if impersonating:
         claims["imp"] = True
     return jwt.encode(claims, settings.jwt_secret, algorithm=_ALGORITHM)
