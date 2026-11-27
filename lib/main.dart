@@ -418,7 +418,7 @@ class _AdminHomeState extends State<AdminHome> {
                 title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
                 subtitle: Text('${p['login_id']}  •  ${p['partner_code']}\n${active ? 'Active' : 'Disabled'}', style: const TextStyle(height: 1.5)),
                 isThreeLine: true,
-                trailing: Wrap(mainAxisSize: MainAxisSize.min, children: [
+                trailing: Wrap(alignment: WrapAlignment.end, children: [
                   if (active) IconButton(tooltip: 'Open partner workspace', onPressed: () => _openPartner(p), icon: const Icon(Icons.login, color: Color(0xFFB88919))),
                   PopupMenuButton<String>(
                     onSelected: (v) {
