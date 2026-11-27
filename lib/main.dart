@@ -389,30 +389,257 @@ class _BusinessHomeState extends State<BusinessHome> {
   }
   Widget _reportMetric(String title,num value)=>Container(width:175,padding:const EdgeInsets.all(13),decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(12)),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(title,style:const TextStyle(fontSize:11,color:Colors.black54)),Text(value.toStringAsFixed(0),style:const TextStyle(fontSize:20,fontWeight:FontWeight.bold))]));
   List<String> _reportLines(){final o=_periodRows('Daily Orders'),e=_periodRows('Expenses'),b=_periodRows('Bank Received'),p=_periodRows('Vendor Payment Transactions'),v=_periodRows('Vendor Payments');final sales=_total(o,'Delivered Sales'),fees=_total(o,'Commission / Fees')+_total(o,'Shipping Fees')+_total(o,'Other Deductions'),expense=_total(e,'Expense');final ret=_periodRows('Returns & RTO');final total=_total(o,'Orders Qty'),returns=_returnQty(ret,'Return'),rto=_returnQty(ret,'RTO');final lines=<String>['DIGITECHIFIED BUSINESS MANAGER','FINANCIAL REPORT • $_periodLabel','','PROFIT & LOSS','Delivered Sales: ${money(sales)}','Marketplace Fees & Deductions: ${money(fees)}','Operating Expenses: ${money(expense)}','Operating Result before inventory cost: ${money(sales-fees-expense)}','Vendor Purchases: ${money(_total(v,'New Amount'))}','','MARKETPLACE DELIVERY SUMMARY','Platform | Orders | Delivered | Return | RTO'];for(final platform in platforms){final qty=o.where((r)=>'${r['Platform']??''}'.toLowerCase()==platform.toLowerCase()).fold<num>(0,(x,r)=>x+(num.tryParse('${r['Orders Qty']??0}')??0));final pr=_returnQty(ret.where((r)=>'${r['Platform']??''}'.toLowerCase()==platform.toLowerCase()).toList(),'Return');final rt=_returnQty(ret.where((r)=>'${r['Platform']??''}'.toLowerCase()==platform.toLowerCase()).toList(),'RTO');lines.add('$platform | $qty | ${(qty-pr-rt).clamp(0,double.infinity)} | $pr | $rt');}lines.addAll(['Total orders: $total','Total delivered: ${(total-returns-rto).clamp(0,double.infinity)}','Total returns: $returns','Total RTO: $rto','','CASH MOVEMENT','Bank Receipts: ${money(_total(b,'Amount'))}','Vendor Payments: ${money(_total(p,'Amount'))}','Operating Expenses: ${money(expense)}','Net Tracked Cash Movement: ${money(_total(b,'Amount')-_total(p,'Amount')-expense)}','Prepared by DIGITECHIFIED']);return lines;}
-  Future<void> _exportFinancialPdf()async{PdfDocument? d;try{d=PdfDocument();PdfPage? page;var y=0.0;final f=PdfStandardFont(PdfFontFamily.helvetica,10),h=PdfStandardFont(PdfFontFamily.helvetica,15,style:PdfFontStyle.bold);for(final line in _reportLines()){if(page==null||y>page.getClientSize().height-30){page=d.pages.add();y=24;}page.graphics.drawString(line.isEmpty?' ':line,line.startsWith('DIGITECHIFIED')||line.startsWith('FINANCIAL')?h:f,bounds:Rect.fromLTWH(24,y,540,20));y+=22;}final bytes=await d.save();await FileSaver.instance.saveFile(name:'DIGITECHIFIED_Financial_Report_${selectedFyStart}_${selectedMonth.toString().padLeft(2,'0')}',bytes:Uint8List.fromList(bytes),fileExtension:'pdf',mimeType:MimeType.pdf);}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('PDF export failed: $e')));}finally{d?.dispose();}}
-  Future<void> _exportFinancialExcel()async{try{final book=Excel.createExcel(),sheet=book['DIGITECHIFIED Report'];sheet.appendRow([TextCellValue('DIGITECHIFIED BUSINESS MANAGER')]);sheet.appendRow([TextCellValue('Financial Report • $_periodLabel')]);sheet.appendRow([TextCellValue('Report Item'),TextCellValue('Value')]);for(final line in _reportLines().skip(3)){if(line.isEmpty)continue;final p=line.split(': ');sheet.appendRow([TextCellValue(p.first),TextCellValue(p.length>1?p.sublist(1).join(': '):'')]);}final bytes=book.encode();if(bytes!=null)await FileSaver.instance.saveFile(name:'DIGITECHIFIED_Financial_Report_${selectedFyStart}_${selectedMonth.toString().padLeft(2,'0')}',bytes:Uint8List.fromList(bytes),fileExtension:'xlsx',mimeType:MimeType.microsoftExcel);}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Excel export failed: $e')));}}
-  Future<void> _exportPdf(String module)async{
-   PdfDocument? d;
-   try{
-    final data=_periodRows(module),cols=fields[module]??[];
-    d=PdfDocument();PdfPage? page;var y=0.0;
-    final body=PdfStandardFont(PdfFontFamily.helvetica,8),heading=PdfStandardFont(PdfFontFamily.helvetica,14,style:PdfFontStyle.bold),sub=PdfStandardFont(PdfFontFamily.helvetica,9,style:PdfFontStyle.bold);
-    void addPage(){page=d!.pages.add();y=22;page!.graphics.drawString('DIGITECHIFIED BUSINESS MANAGER',heading,bounds:Rect.fromLTWH(22,y,550,22));y+=24;page!.graphics.drawString('$module • $_periodLabel',sub,bounds:Rect.fromLTWH(22,y,550,16));y+=22;}
-    addPage();
-    final lines=<String>['Records: ${data.length}','',...data.asMap().entries.map((entry){
-      final r=entry.value;return '${entry.key+1}. '+cols.map((c)=>'$c: ${r[c]??''}').join('   |   ');
-    })];
-    for(final raw in lines){
-      final chunks=<String>[];
-      if(raw.isEmpty){chunks.add(' ');}else{for(var i=0;i<raw.length;i+=105){chunks.add(raw.substring(i, i+105>raw.length?raw.length:i+105));}}
-      for(final line in chunks){
-       if(y>page!.getClientSize().height-24)addPage();
-       page!.graphics.drawString(line,body,bounds:Rect.fromLTWH(22,y,550,14));y+=15;
+  Future<void> _exportFinancialPdf() async {
+    PdfDocument? doc;
+    try {
+      doc = PdfDocument();
+      doc.pageSettings.orientation = PdfPageOrientation.landscape;
+      final page = doc.pages.add();
+      final size = page.getClientSize();
+      final navy = PdfSolidBrush(PdfColor(22, 35, 61));
+      final gold = PdfSolidBrush(PdfColor(214, 165, 42));
+      final grey = PdfSolidBrush(PdfColor(95, 105, 120));
+      final white = PdfBrushes.white;
+      final titleFont = PdfStandardFont(PdfFontFamily.helvetica, 19, style: PdfFontStyle.bold);
+      final sectionFont = PdfStandardFont(PdfFontFamily.helvetica, 11, style: PdfFontStyle.bold);
+      final bodyFont = PdfStandardFont(PdfFontFamily.helvetica, 9);
+      page.graphics.drawRectangle(brush: navy, bounds: Rect.fromLTWH(0, 0, size.width, 76));
+      page.graphics.drawString('DIGITECHIFIED', PdfStandardFont(PdfFontFamily.helvetica, 10, style: PdfFontStyle.bold), brush: gold, bounds: Rect.fromLTWH(24, 12, 250, 14));
+      page.graphics.drawString('FINANCIAL STATEMENT', titleFont, brush: white, bounds: Rect.fromLTWH(24, 29, 440, 28));
+      page.graphics.drawString(_periodLabel, bodyFont, brush: white, bounds: Rect.fromLTWH(size.width - 190, 32, 165, 18));
+      var y = 92.0;
+      final o = _periodRows('Daily Orders'), ret = _periodRows('Returns & RTO');
+      final expenses = _periodRows('Expenses'), bank = _periodRows('Bank Received');
+      final payments = _periodRows('Vendor Payment Transactions'), vendors = _periodRows('Vendor Payments');
+      final sales = _total(o, 'Delivered Sales');
+      final fees = _total(o, 'Commission / Fees') + _total(o, 'Shipping Fees') + _total(o, 'Other Deductions');
+      final expenseTotal = _total(expenses, 'Expense');
+      final purchases = _total(vendors, 'New Amount');
+      final bankTotal = _total(bank, 'Amount');
+      final paymentTotal = _total(payments, 'Amount');
+      final orders = _total(o, 'Orders Qty');
+      final returns = _returnQty(ret, 'Return');
+      final rto = _returnQty(ret, 'RTO');
+      final delivered = (orders - returns - rto).clamp(0, double.infinity);
+      void section(String label) {
+        page.graphics.drawRectangle(brush: gold, bounds: Rect.fromLTWH(22, y, size.width - 44, 22));
+        page.graphics.drawString(label, sectionFont, brush: navy, bounds: Rect.fromLTWH(30, y + 4, size.width - 60, 15));
+        y += 29;
       }
+      void line(String label, String value, {bool bold = false}) {
+        final font = bold ? PdfStandardFont(PdfFontFamily.helvetica, 9, style: PdfFontStyle.bold) : bodyFont;
+        page.graphics.drawString(label, font, brush: grey, bounds: Rect.fromLTWH(30, y, size.width * .62, 16));
+        page.graphics.drawString(value, font, brush: navy, bounds: Rect.fromLTWH(size.width * .68, y, size.width * .27, 16), format: PdfStringFormat(alignment: PdfTextAlignment.right));
+        y += 19;
+      }
+      section('PROFIT & LOSS STATEMENT');
+      line('Delivered sales revenue', money(sales));
+      line('Marketplace fees and deductions', money(fees));
+      line('Operating expenses', money(expenseTotal));
+      line('Operating result before inventory cost', money(sales - fees - expenseTotal), bold: true);
+      line('Vendor purchases (disclosed separately; not treated as COGS)', money(purchases));
+      y += 8;
+      section('MARKETPLACE OPERATIONS');
+      final grid = PdfGrid();
+      grid.columns.add(count: 5);
+      final headers = ['Platform', 'Orders', 'Delivered', 'Returns', 'RTO'];
+      final header = grid.headers.add(1)[0];
+      for (var c = 0; c < headers.length; c++) { header.cells[c].value = headers[c]; }
+      header.style.backgroundBrush = navy;
+      header.style.textBrush = white;
+      header.style.font = PdfStandardFont(PdfFontFamily.helvetica, 9, style: PdfFontStyle.bold);
+      for (final platform in platforms) {
+        final platformOrders = o.where((r) => '${r['Platform'] ?? ''}'.toLowerCase() == platform.toLowerCase()).toList();
+        final platformReturns = ret.where((r) => '${r['Platform'] ?? ''}'.toLowerCase() == platform.toLowerCase()).toList();
+        final q = _total(platformOrders, 'Orders Qty');
+        final rr = _returnQty(platformReturns, 'Return');
+        final rt = _returnQty(platformReturns, 'RTO');
+        final row = grid.rows.add();
+        [platform, q.toStringAsFixed(0), (q - rr - rt).clamp(0, double.infinity).toStringAsFixed(0), rr.toStringAsFixed(0), rt.toStringAsFixed(0)].asMap().forEach((i, v) => row.cells[i].value = v);
+      }
+      grid.style = PdfGridStyle(font: bodyFont, cellPadding: PdfPaddings(left: 7, right: 7, top: 5, bottom: 5));
+      final gridResult = grid.draw(page: page, bounds: Rect.fromLTWH(22, y, size.width - 44, 150)) as PdfLayoutResult;
+      y = gridResult.bounds.bottom + 18;
+      section('CASH FLOW SUMMARY');
+      line('Bank receipts recorded', money(bankTotal));
+      line('Vendor payments made', money(paymentTotal));
+      line('Operating expenses paid/recorded', money(expenseTotal));
+      line('Net tracked cash movement', money(bankTotal - paymentTotal - expenseTotal), bold: true);
+      y += 8;
+      section('BALANCE SHEET – RECORDED POSITION');
+      line('Vendor payable / pending balances', money(vendors.fold<num>(0, (v, r) => v + (num.tryParse('${r['Closing Balance'] ?? r['Pending Amount'] ?? 0}') ?? 0))));
+      line('Inventory opening / closing value', 'NOT RECORDED');
+      line('Marketplace receivables / unsettled amount', 'NOT RECORDED');
+      line('Opening bank and cash balances', 'NOT RECORDED');
+      line('Loans and owner capital', 'NOT RECORDED');
+      page.graphics.drawString('Note: This report uses entered records only. Missing opening balances, inventory, receivables, loans and capital are not estimated.', PdfStandardFont(PdfFontFamily.helvetica, 8, style: PdfFontStyle.italic), brush: grey, bounds: Rect.fromLTWH(24, size.height - 28, size.width - 48, 16));
+      final bytes = await doc.save();
+      await FileSaver.instance.saveFile(name: 'DIGITECHIFIED_Financial_Report_${selectedFyStart}_${selectedMonth.toString().padLeft(2, '0')}', bytes: Uint8List.fromList(bytes), fileExtension: 'pdf', mimeType: MimeType.pdf);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('DIGITECHIFIED Financial PDF exported')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Financial PDF export failed: $e')));
+    } finally { doc?.dispose(); }
+  }
+
+  Future<void> _exportFinancialExcel() async {
+    try {
+      final book = Excel.createExcel();
+      book.rename('Sheet1', 'Overview');
+      final navy = ExcelColor.fromHexString('#16233D');
+      final gold = ExcelColor.fromHexString('#D6A52A');
+      final pale = ExcelColor.fromHexString('#FFF5D9');
+      final white = ExcelColor.fromHexString('#FFFFFF');
+      final grey = ExcelColor.fromHexString('#667085');
+      final titleStyle = CellStyle(bold: true, fontSize: 16, fontColorHex: white, backgroundColorHex: navy, verticalAlign: VerticalAlign.Center);
+      final sectionStyle = CellStyle(bold: true, fontSize: 11, fontColorHex: navy, backgroundColorHex: pale);
+      final headerStyle = CellStyle(bold: true, fontColorHex: white, backgroundColorHex: navy, textWrapping: TextWrapping.WrapText, verticalAlign: VerticalAlign.Center);
+      final normalStyle = CellStyle(fontSize: 10, fontColorHex: grey, textWrapping: TextWrapping.WrapText, verticalAlign: VerticalAlign.Center);
+      final valueStyle = CellStyle(fontSize: 10, bold: true, horizontalAlign: HorizontalAlign.Right, verticalAlign: VerticalAlign.Center);
+      void put(Sheet sh, int row, int col, String value, CellStyle style) {
+        final cell = sh.cell(CellIndex.indexByColumnRow(columnIndex: col, rowIndex: row));
+        cell.value = TextCellValue(value);
+        cell.cellStyle = style;
+      }
+      void sectionRow(Sheet sh, int row, String title, int columns) {
+        put(sh, row, 0, title, sectionStyle);
+        for (var c = 1; c < columns; c++) put(sh, row, c, '', sectionStyle);
+      }
+      void twoCol(Sheet sh, int row, String label, String value, {bool bold = false}) {
+        put(sh, row, 0, label, normalStyle);
+        put(sh, row, 1, value, bold ? valueStyle : normalStyle);
+      }
+      Sheet makeTable(String name, List<String> headers, List<List<String>> rowsData) {
+        final sh = book[name];
+        put(sh, 0, 0, 'DIGITECHIFIED BUSINESS MANAGER', titleStyle);
+        for (var c = 1; c < headers.length; c++) put(sh, 0, c, '', titleStyle);
+        put(sh, 1, 0, '$name • $_periodLabel', sectionStyle);
+        for (var c = 1; c < headers.length; c++) put(sh, 1, c, '', sectionStyle);
+        for (var c = 0; c < headers.length; c++) put(sh, 3, c, headers[c], headerStyle);
+        for (var r = 0; r < rowsData.length; r++) {
+          for (var c = 0; c < headers.length; c++) put(sh, r + 4, c, c < rowsData[r].length ? rowsData[r][c] : '', normalStyle);
+        }
+        for (var c = 0; c < headers.length; c++) sh.setColumnWidth(c, c == 0 ? 20 : 18);
+        return sh;
+      }
+      final o = _periodRows('Daily Orders'), ret = _periodRows('Returns & RTO');
+      final expenses = _periodRows('Expenses'), bank = _periodRows('Bank Received');
+      final payments = _periodRows('Vendor Payment Transactions'), vendors = _periodRows('Vendor Payments');
+      final sales = _total(o, 'Delivered Sales');
+      final fees = _total(o, 'Commission / Fees') + _total(o, 'Shipping Fees') + _total(o, 'Other Deductions');
+      final expenseTotal = _total(expenses, 'Expense');
+      final purchases = _total(vendors, 'New Amount');
+      final bankTotal = _total(bank, 'Amount');
+      final paymentTotal = _total(payments, 'Amount');
+      final orders = _total(o, 'Orders Qty'), returns = _returnQty(ret, 'Return'), rto = _returnQty(ret, 'RTO');
+      final delivered = (orders - returns - rto).clamp(0, double.infinity);
+      final overview = book['Overview'];
+      put(overview, 0, 0, 'DIGITECHIFIED BUSINESS MANAGER', titleStyle);
+      put(overview, 1, 0, 'FINANCIAL REPORT • $_periodLabel', sectionStyle);
+      sectionRow(overview, 3, 'KEY BUSINESS METRICS', 4);
+      final metrics = [['Total Orders', orders.toStringAsFixed(0)], ['Delivered', delivered.toStringAsFixed(0)], ['Returns', returns.toStringAsFixed(0)], ['RTO', rto.toStringAsFixed(0)]];
+      for (var i = 0; i < metrics.length; i++) { twoCol(overview, 4 + i, metrics[i][0], metrics[i][1], bold: true); }
+      sectionRow(overview, 10, 'PROFIT & LOSS', 4);
+      twoCol(overview, 11, 'Delivered sales revenue', money(sales));
+      twoCol(overview, 12, 'Marketplace fees and deductions', money(fees));
+      twoCol(overview, 13, 'Operating expenses', money(expenseTotal));
+      twoCol(overview, 14, 'Operating result before inventory cost', money(sales - fees - expenseTotal), bold: true);
+      twoCol(overview, 15, 'Vendor purchases (shown separately)', money(purchases));
+      sectionRow(overview, 18, 'CASH FLOW', 4);
+      twoCol(overview, 19, 'Bank receipts', money(bankTotal));
+      twoCol(overview, 20, 'Vendor payments', money(paymentTotal));
+      twoCol(overview, 21, 'Operating expenses', money(expenseTotal));
+      twoCol(overview, 22, 'Net tracked cash movement', money(bankTotal - paymentTotal - expenseTotal), bold: true);
+      sectionRow(overview, 25, 'BALANCE SHEET – RECORDED POSITION', 4);
+      twoCol(overview, 26, 'Vendor pending balances', money(vendors.fold<num>(0, (v, r) => v + (num.tryParse('${r['Closing Balance'] ?? r['Pending Amount'] ?? 0}') ?? 0))));
+      twoCol(overview, 27, 'Inventory / receivables / opening cash / loans / capital', 'NOT RECORDED');
+      for (var c = 0; c < 4; c++) overview.setColumnWidth(c, c == 0 ? 48 : 22);
+      makeTable('Marketplace', ['Platform', 'Orders', 'Delivered', 'Returns', 'RTO'], platforms.map((platform) {
+        final po = o.where((r) => '${r['Platform'] ?? ''}'.toLowerCase() == platform.toLowerCase()).toList();
+        final pr = ret.where((r) => '${r['Platform'] ?? ''}'.toLowerCase() == platform.toLowerCase()).toList();
+        final q = _total(po, 'Orders Qty'), rr = _returnQty(pr, 'Return'), rt = _returnQty(pr, 'RTO');
+        return [platform, q.toStringAsFixed(0), (q - rr - rt).clamp(0, double.infinity).toStringAsFixed(0), rr.toStringAsFixed(0), rt.toStringAsFixed(0)];
+      }).toList());
+      makeTable('P&L', ['Particulars', 'Amount'], [
+        ['Delivered sales revenue', money(sales)], ['Marketplace fees & deductions', money(fees)], ['Operating expenses', money(expenseTotal)],
+        ['Operating result before inventory cost', money(sales - fees - expenseTotal)], ['Vendor purchases (not treated as COGS)', money(purchases)]
+      ]);
+      makeTable('Balance Sheet', ['Particulars', 'Recorded value / status'], [
+        ['Vendor pending balances', money(vendors.fold<num>(0, (v, r) => v + (num.tryParse('${r['Closing Balance'] ?? r['Pending Amount'] ?? 0}') ?? 0)))],
+        ['Inventory opening / closing', 'NOT RECORDED'], ['Marketplace receivables', 'NOT RECORDED'],
+        ['Opening bank / cash', 'NOT RECORDED'], ['Loans', 'NOT RECORDED'], ['Owner capital', 'NOT RECORDED']
+      ]);
+      makeTable('Cash Flow', ['Particulars', 'Amount'], [
+        ['Bank receipts', money(bankTotal)], ['Vendor payments', money(paymentTotal)], ['Operating expenses', money(expenseTotal)],
+        ['Net tracked cash movement', money(bankTotal - paymentTotal - expenseTotal)]
+      ]);
+      makeTable('Daily Orders', fields['Daily Orders']!, o.map((r) => fields['Daily Orders']!.map((c) => '${r[c] ?? ''}')).toList());
+      makeTable('Returns & RTO', fields['Returns & RTO']!, ret.map((r) => fields['Returns & RTO']!.map((c) => '${r[c] ?? ''}')).toList());
+      makeTable('Bank Received', fields['Bank Received']!, bank.map((r) => fields['Bank Received']!.map((c) => '${r[c] ?? ''}')).toList());
+      makeTable('Expenses', fields['Expenses']!, expenses.map((r) => fields['Expenses']!.map((c) => '${r[c] ?? ''}')).toList());
+      makeTable('Vendor Payments', fields['Vendor Payment Transactions']!, payments.map((r) => fields['Vendor Payment Transactions']!.map((c) => '${r[c] ?? ''}')).toList());
+      final bytes = book.encode();
+      if (bytes == null) throw Exception('Excel workbook could not be generated');
+      await FileSaver.instance.saveFile(name: 'DIGITECHIFIED_Financial_Report_${selectedFyStart}_${selectedMonth.toString().padLeft(2, '0')}', bytes: Uint8List.fromList(bytes), fileExtension: 'xlsx', mimeType: MimeType.microsoftExcel);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('DIGITECHIFIED Financial Excel exported')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Financial Excel export failed: $e')));
     }
-    final bytes=await d.save();
-    await FileSaver.instance.saveFile(name:'DIGITECHIFIED_${module.replaceAll(' ','_')}_${selectedFyStart}_${selectedMonth.toString().padLeft(2,'0')}',bytes:Uint8List.fromList(bytes),fileExtension:'pdf',mimeType:MimeType.pdf);
-   }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('PDF export failed: $e')));}finally{d?.dispose();}
+  }
+
+  Future<void> _exportPdf(String module) async {
+    PdfDocument? doc;
+    try {
+      final data = _periodRows(module);
+      final allCols = fields[module] ?? [];
+      final columns = module == 'Daily Orders'
+          ? ['Date','Platform','Firm / Account','Order ID','SKU / Product','Brand','Size','Color','Orders Qty','Gross Order Value','Delivered Qty','Delivered Sales','Commission / Fees','Shipping Fees','Courier','AWB / Tracking No.']
+          : allCols;
+      doc = PdfDocument();
+      doc.pageSettings.orientation = PdfPageOrientation.landscape;
+      final page = doc.pages.add();
+      final pageSize = page.getClientSize();
+      final navy = PdfSolidBrush(PdfColor(22, 35, 61));
+      final gold = PdfSolidBrush(PdfColor(214, 165, 42));
+      final white = PdfBrushes.white;
+      final title = PdfStandardFont(PdfFontFamily.helvetica, 18, style: PdfFontStyle.bold);
+      final sub = PdfStandardFont(PdfFontFamily.helvetica, 9);
+      page.graphics.drawRectangle(brush: navy, bounds: Rect.fromLTWH(0, 0, pageSize.width, 68));
+      page.graphics.drawString('DIGITECHIFIED', PdfStandardFont(PdfFontFamily.helvetica, 9, style: PdfFontStyle.bold), brush: gold, bounds: Rect.fromLTWH(22, 10, 220, 14));
+      page.graphics.drawString(module.toUpperCase(), title, brush: white, bounds: Rect.fromLTWH(22, 27, pageSize.width - 260, 25));
+      page.graphics.drawString('$_periodLabel   •   Records: ${data.length}', sub, brush: white, bounds: Rect.fromLTWH(pageSize.width - 220, 30, 200, 18), format: PdfStringFormat(alignment: PdfTextAlignment.right));
+      final grid = PdfGrid();
+      grid.columns.add(count: columns.length);
+      final header = grid.headers.add(1)[0];
+      for (var i = 0; i < columns.length; i++) { header.cells[i].value = columns[i]; }
+      header.style.backgroundBrush = navy;
+      header.style.textBrush = white;
+      header.style.font = PdfStandardFont(PdfFontFamily.helvetica, module == 'Daily Orders' ? 5.5 : 9, style: PdfFontStyle.bold);
+      for (final record in data) {
+        final row = grid.rows.add();
+        for (var i = 0; i < columns.length; i++) {
+          row.cells[i].value = '${record[columns[i]] ?? ''}';
+        }
+      }
+      grid.style = PdfGridStyle(
+        font: PdfStandardFont(PdfFontFamily.helvetica, module == 'Daily Orders' ? 5.2 : 9),
+        cellPadding: PdfPaddings(left: module == 'Daily Orders' ? 2 : 6, right: module == 'Daily Orders' ? 2 : 6, top: 4, bottom: 4),
+      );
+      if (module == 'Daily Orders') {
+        final widths = [42,42,72,70,74,65,24,35,28,48,30,48,42,42,48,75];
+        for (var i = 0; i < widths.length && i < grid.columns.count; i++) { grid.columns[i].width = widths[i].toDouble(); }
+      }
+      final result = grid.draw(
+        page: page,
+        bounds: Rect.fromLTWH(18, 82, pageSize.width - 36, pageSize.height - 102),
+        format: PdfLayoutFormat(layoutType: PdfLayoutType.paginate, breakType: PdfLayoutBreakType.fitElement),
+      );
+      if (result == null) throw Exception('PDF table could not be laid out');
+      final bytes = await doc.save();
+      await FileSaver.instance.saveFile(name: 'DIGITECHIFIED_${module.replaceAll(' ', '_').replaceAll('&', 'and')}_${selectedFyStart}_${selectedMonth.toString().padLeft(2, '0')}', bytes: Uint8List.fromList(bytes), fileExtension: 'pdf', mimeType: MimeType.pdf);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('DIGITECHIFIED $module PDF exported')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$module PDF export failed: $e')));
+    } finally { doc?.dispose(); }
   }
 
  Widget _dashboard(){
