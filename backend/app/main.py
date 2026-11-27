@@ -257,8 +257,9 @@ def update_partner(tenant_id: UUID, data: PartnerUpdateIn, admin: Principal = De
     if data.status is not None:
         partner.status = data.status
         changes.append("status")
-    _write_admin_log(db, admin.id, tenant_id, "partner_updated", ",".join(changes))
-    db.commit()
+    if changes:
+        _write_admin_log(db, admin.id, tenant_id, "partner_updated", ",".join(changes))
+        db.commit()
     return {"ok": True, "tenant_id": str(tenant_id), "name": tenant.name, "login_id": user.email, "status": partner.status}
 
 
@@ -270,10 +271,11 @@ def reset_partner_password(tenant_id: UUID, data: PasswordResetIn, admin: Princi
         raise HTTPException(status_code=404, detail="Partner not found")
     user.password_hash = hash_password(data.new_password)
     security_state = db.get(UserSecurity, user.id)
+    reset_at = datetime.now(timezone.utc)
     if security_state:
-        security_state.tokens_valid_after = datetime.now(timezone.utc).replace(microsecond=0)
+        security_state.tokens_valid_after = reset_at
     else:
-        db.add(UserSecurity(user_id=user.id, tokens_valid_after=__import__("datetime").datetime.now(__import__("datetime").timezone.utc)))
+        db.add(UserSecurity(user_id=user.id, tokens_valid_after=reset_at))
     _write_admin_log(db, admin.id, tenant_id, "password_reset", f"Password reset for {user.email}")
     db.commit()
     return {"ok": True, "message": "Partner password updated"}
@@ -351,11 +353,11 @@ async def parse_label_pdf(
     file: UploadFile = File(...),
     platform: str = Form(...),
     firm: str = Form(""),
-    user: User = Depends(current_user),
+    user: Principal = Depends(current_user),
 ):
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Please upload a PDF file")
-    raw = await file.read()
+    raw = await file.read(20 * 1024 * 1024 + 1)
     if len(raw) > 20 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="PDF must be 20 MB or smaller")
     try:
@@ -395,7 +397,7 @@ async def parse_label_pdf(
             customer = re.sub(r"\s+", " ", customer_match.group(1)).strip() if customer_match else ""
             pin_match = re.search(r"\b(\d{6})\b", customer)
             records.append({
-                "Date": __import__("datetime").date.today().isoformat(),
+                "Date": datetime.now(timezone.utc).date().isoformat(),
                 "Platform": platform.strip(),
                 "Firm / Account": firm.strip(),
                 "Order ID": order_id,
@@ -418,7 +420,7 @@ async def parse_label_pdf(
 
 
 @app.delete("/api/records/{record_id}")
-def remove_record(record_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def remove_record(record_id: str, user: Principal = Depends(current_user), db: Session = Depends(get_db)):
     item = db.scalar(select(BusinessRecord).where(BusinessRecord.tenant_id == user.tenant_id, BusinessRecord.record_id == record_id))
     if not item:
         raise HTTPException(status_code=404, detail="Record not found")
