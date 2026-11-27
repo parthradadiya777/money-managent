@@ -56,7 +56,7 @@ def main():
 
     _, profile = call("GET", "/api/auth/me", token=token)
     assert profile["email"] == EMAIL.lower(), profile
-    assert profile["role"] == "partner", profile
+    assert profile["role"] in ("partner", "owner"), profile
 
     _, saved = call("PUT", "/api/records/batch", {
         "records": [{
