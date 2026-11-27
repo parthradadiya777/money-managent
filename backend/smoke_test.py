@@ -56,6 +56,7 @@ def main():
 
     _, profile = call("GET", "/api/auth/me", token=token)
     assert profile["email"] == EMAIL.lower(), profile
+    assert profile["role"] == "partner", profile
 
     _, saved = call("PUT", "/api/records/batch", {
         "records": [{
@@ -73,7 +74,7 @@ def main():
     _, after_delete = call("GET", "/api/records", token=token)
     assert not any(x["record_id"] == RECORD_ID for x in after_delete.get("records", [])), after_delete
 
-    print("PASS: health, register, login token, profile, record create/read/delete")
+    print("PASS: test-only partner registration, profile, tenant record create/read/delete")
     print("Synthetic account:", EMAIL)
 
 
