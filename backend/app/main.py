@@ -102,7 +102,9 @@ def current_user(authorization: str | None = Header(default=None), db: Session =
         if requested_tenant_id != actor.tenant_id:
             raise HTTPException(status_code=403, detail="Partner data access denied")
         partner = _partner_for_tenant(db, actor.tenant_id)
-        if partner and partner.status != "active":
+        if not partner:
+            raise HTTPException(status_code=403, detail="Partner workspace is not provisioned")
+        if partner.status != "active":
             raise HTTPException(status_code=403, detail="Partner account is disabled")
         effective_tenant_id = actor.tenant_id
 
@@ -127,8 +129,22 @@ def health():
 
 
 @app.post("/api/auth/register")
-def register_disabled():
-    raise HTTPException(status_code=403, detail="Public registration is disabled. Contact Digitechified Admin.")
+def register_test_partner(data: LoginIn, business_name: str = "", db: Session = Depends(get_db)):
+    # Synthetic-only self-registration is retained for the isolated CI test service.
+    if settings.app_env.lower() != "test":
+        raise HTTPException(status_code=403, detail="Public registration is disabled. Contact Digitechified Admin.")
+    if len(business_name.strip()) < 2:
+        raise HTTPException(status_code=422, detail="Test business name is required")
+    if db.scalar(select(User).where(User.email == data.email.lower())):
+        raise HTTPException(status_code=409, detail="Email already registered")
+    tenant = Tenant(name=business_name.strip())
+    db.add(tenant)
+    db.flush()
+    user = User(tenant_id=tenant.id, email=data.email.lower(), password_hash=hash_password(data.password), role="partner")
+    partner = Partner(tenant_id=tenant.id, code=f"P-{uuid4().hex[:10].upper()}", status="active")
+    db.add_all([user, partner])
+    db.commit()
+    return {"access_token": create_access_token(str(user.id), str(tenant.id)), "token_type": "bearer", "business_name": tenant.name, "role": user.role, "tenant_id": str(tenant.id)}
 
 
 @app.post("/api/auth/login")
@@ -139,8 +155,8 @@ def login(data: LoginIn, db: Session = Depends(get_db)):
     tenant = db.get(Tenant, user.tenant_id)
     if user.role != "super_admin":
         partner = _partner_for_tenant(db, user.tenant_id)
-        if partner and partner.status != "active":
-            raise HTTPException(status_code=403, detail="Partner account is disabled. Contact Digitechified Admin.")
+        if not partner or partner.status != "active":
+            raise HTTPException(status_code=403, detail="Partner account is disabled or not provisioned. Contact Digitechified Admin.")
     return {
         "access_token": create_access_token(str(user.id), str(user.tenant_id)),
         "token_type": "bearer",
@@ -156,6 +172,7 @@ def me(user: Principal = Depends(current_user), db: Session = Depends(get_db)):
     tenant = db.get(Tenant, user.tenant_id)
     return {
         "login_id": user.email,
+        "email": user.email,
         "role": user.role,
         "business_name": tenant.name if tenant else "",
         "impersonating": user.impersonating,
