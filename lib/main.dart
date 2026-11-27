@@ -659,10 +659,22 @@ class _BusinessHomeState extends State<BusinessHome> {
    ]));
   }
   num _total(List<Map> data,String field)=>data.fold<num>(0,(v,r)=>v+(num.tryParse('${r[field]??0}'.replaceAll(',',''))??0));
+  DateTime _periodStart()=>selectedMonth==0?DateTime(selectedFyStart,4,1):DateTime(selectedFyStart+(selectedMonth>=4?0:1),selectedMonth,1);
+  DateTime _periodEndExclusive(){final start=_periodStart();return selectedMonth==0?DateTime(start.year+1,4,1):DateTime(start.year,start.month+1,1);}
+  bool _beforePeriod(Map row){final d=_dateOf(row);return d!=null&&d.isBefore(_periodStart());}
+  num _cashOpeningBalance(){
+   final start=_periodStart();
+   final balances=rows('Opening Balances').where((r){final d=_dateOf(r);return d!=null&&!d.isAfter(start);}).toList();
+   final opening=_total(balances,'Opening Balance');
+   final priorBank=rows('Bank Received').where(_beforePeriod).toList();
+   final priorPayments=rows('Vendor Payment Transactions').where(_beforePeriod).toList();
+   final priorExpenses=rows('Expenses').where(_beforePeriod).toList();
+   return opening+_total(priorBank,'Amount')-_total(priorPayments,'Amount')-_total(priorExpenses,'Expense');
+  }
   num _returnQty(List<Map> data,String type)=>data.where((r)=>'${r['RTO / Return']??''}'.toLowerCase()==type.toLowerCase()).fold<num>(0,(v,r)=>v+(num.tryParse('${r['Details']??0}'.replaceAll(',',''))??0));
   Widget _financialReportsPage(){
    final o=_periodRows('Daily Orders'),ret=_periodRows('Returns & RTO'),v=_periodRows('Vendor Payments'),b=_periodRows('Bank Received'),e=_periodRows('Expenses'),p=_periodRows('Vendor Payment Transactions');
-   final sales=_total(o,'Delivered Sales'),fees=_total(o,'Commission / Fees')+_total(o,'Shipping Fees')+_total(o,'Other Deductions'),expenses=_total(e,'Expense'),bank=_total(b,'Amount'),paid=_total(p,'Amount'),purchase=_total(v,'New Amount'),opening=_total(_periodRows('Opening Balances'),'Opening Balance');
+   final sales=_total(o,'Delivered Sales'),fees=_total(o,'Commission / Fees')+_total(o,'Shipping Fees')+_total(o,'Other Deductions'),expenses=_total(e,'Expense'),bank=_total(b,'Amount'),paid=_total(p,'Amount'),purchase=_total(v,'New Amount'),opening=_cashOpeningBalance();
    final returns=_returnQty(ret,'Return'),rto=_returnQty(ret,'RTO'),orders=_total(o,'Orders Qty'),delivered=(orders-returns-rto).clamp(0,double.infinity);
    Widget line(String k,num n)=>Padding(padding:const EdgeInsets.symmetric(vertical:7),child:Row(children:[Expanded(child:Text(k,style:const TextStyle(fontSize:13))),Text(money(n),style:const TextStyle(fontWeight:FontWeight.w700,fontSize:13))]));
    Widget panel(String title,IconData icon,List<Widget> children)=>Card(elevation:0,color:Colors.white,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(16),side:const BorderSide(color:Color(0xFFE9E5DC))),child:Padding(padding:const EdgeInsets.all(18),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Row(children:[Icon(icon,color:const Color(0xFFB88919)),const SizedBox(width:9),Text(title,style:const TextStyle(fontSize:14,fontWeight:FontWeight.bold,letterSpacing:.3))]),const Divider(height:24),...children])));
@@ -682,7 +694,7 @@ class _BusinessHomeState extends State<BusinessHome> {
     const SizedBox(height:14),
     panel('PROFIT & LOSS SUMMARY',Icons.account_balance_wallet,[line('Delivered Sales Revenue',sales),line('Marketplace Fees & Deductions',fees),line('Operating Expenses',expenses),const Divider(height:18),line('Operating Result before inventory cost',sales-fees-expenses),line('Vendor Purchases (shown separately)',purchase),const Text('Inventory opening/closing value is not yet recorded. Vendor purchases are shown separately and not treated as Cost of Goods Sold to avoid overstating profit.',style:TextStyle(color:Colors.deepOrange,fontSize:11,height:1.4))]),
     const SizedBox(height:14),
-    panel('CASH FLOW & VENDOR PAYMENTS',Icons.payments,[line('Opening Cash / Bank Balance',opening),line('Bank Receipts Recorded',bank),line('Vendor Payments Made',paid),line('Operating Expenses',expenses),const Divider(height:18),line('Net Tracked Cash Movement',bank-paid-expenses),line('Estimated Closing Cash / Bank',opening+bank-paid-expenses),Text('${p.length} vendor payment transactions • ${b.length} bank receipts • ${e.length} expense records',style:const TextStyle(fontSize:11,color:Colors.black54))]),
+    panel('CASH FLOW & VENDOR PAYMENTS',Icons.payments,[line('Opening Cash / Bank Balance',opening),line('Bank Receipts Recorded',bank),line('Vendor Payments Made',paid),line('Operating Expenses',expenses),const Divider(height:18),line('Net Tracked Cash Movement',bank-paid-expenses),line('Estimated Closing Cash / Bank',opening+bank-paid-expenses),Text('Opening balance includes prior recorded movements before this period. ${p.length} vendor payment transactions • ${b.length} bank receipts • ${e.length} expense records',style:const TextStyle(fontSize:11,color:Colors.black54))]),
     const SizedBox(height:14),
     panel('BALANCE SHEET CHECKLIST',Icons.account_balance,[line('Opening Cash / Bank entered',opening),const Text('Opening balances are entered separately by Cash or Bank account. Inventory, receivables, loans and owner capital still need their own records before a complete balance sheet can be prepared.',style:TextStyle(fontSize:12,color:Colors.black54,height:1.5))])
    ]);
