@@ -537,6 +537,30 @@ class _BusinessHomeState extends State<BusinessHome> {
    if (mounted) setState(() => _syncMessage = 'Sync pending');
   }
  }
+ Future<void> _returnToAdmin() async {
+  final authBox = Hive.box(hiveBoxName);
+  final adminToken = authBox.get('cloudAdminToken') as String?;
+  if (adminToken == null || adminToken.isEmpty) return;
+  await authBox.put('cloudToken', adminToken);
+  await authBox.delete('cloudAdminToken');
+  await authBox.delete('cloudImpersonating');
+  await authBox.delete('cloudTenantId');
+  await authBox.delete('cloudAdminPartnerName');
+  await box.delete('cloudToken');
+  activeHiveBoxName = hiveBoxName;
+  if (mounted) Navigator.of(context).pushAndRemoveUntil(
+    MaterialPageRoute(builder: (_) => const AdminHome()), (route) => false);
+ }
+ Future<void> _logout() async {
+  final authBox = Hive.box(hiveBoxName);
+  for (final key in ['cloudToken','cloudAdminToken','cloudImpersonating','cloudTenantId','cloudAdminPartnerName','cloudRole']) {
+   await authBox.delete(key);
+  }
+  await box.delete('cloudToken');
+  activeHiveBoxName = hiveBoxName;
+  if (mounted) Navigator.of(context).pushAndRemoveUntil(
+    MaterialPageRoute(builder: (_) => const BusinessManagerApp()), (route) => false);
+ }
  @override Widget build(BuildContext context){
   final wide=MediaQuery.of(context).size.width>850;
   return Scaffold(body:Row(children:[
@@ -567,12 +591,10 @@ class _BusinessHomeState extends State<BusinessHome> {
    label:Text(_syncMessage ?? (box.get('cloudToken') != null ? 'Cloud sync' : 'Local data'))),
   if (CloudSyncService.configured && box.get('cloudToken') != null)
    IconButton(tooltip:'Sync now', onPressed:_syncOnStart, icon:const Icon(Icons.sync)),
+  if (Hive.box(hiveBoxName).get('cloudAdminToken') != null)
+   IconButton(tooltip:'Return to Super Admin', onPressed:_returnToAdmin, icon:const Icon(Icons.admin_panel_settings,color:Color(0xFFB88919))),
   if (CloudSyncService.configured && box.get('cloudToken') != null)
-   IconButton(tooltip:'Logout', onPressed:() async {
-    await box.delete('cloudToken');
-    if (mounted) Navigator.of(context).pushAndRemoveUntil(
-     MaterialPageRoute(builder: (_) => const BusinessManagerApp()), (route) => false);
-   }, icon:const Icon(Icons.logout)),
+   IconButton(tooltip:'Logout', onPressed:_logout, icon:const Icon(Icons.logout)),
   const SizedBox(width:8),
   const CircleAvatar(backgroundColor:Color(0xFFE9EFFB),child:Text('P',style:TextStyle(color:Color(0xFFD6A52A),fontWeight:FontWeight.bold))),
  ]));
