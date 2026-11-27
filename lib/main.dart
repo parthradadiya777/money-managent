@@ -158,15 +158,15 @@ class _LoginPageState extends State<LoginPage> {
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
               const SizedBox(height: 24),
               if (register) ...[
-                TextField(controller: business, decoration: const InputDecoration(labelText: 'Business / Firm Name')),
+                TextField(controller: business, decoration: const InputDecoration(labelTfileExtension: 'Business / Firm Name')),
                 const SizedBox(height: 12),
               ],
               TextField(controller: email, keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(labelText: 'Email')),
+                decoration: const InputDecoration(labelTfileExtension: 'Email')),
               const SizedBox(height: 12),
-              TextField(controller: password, obscureText: obscure,
-                decoration: InputDecoration(labelText: 'Password',
-                  helperText: register ? 'Use at least 12 characters' : null,
+              TextField(controller: password, obscureTfileExtension: obscure,
+                decoration: InputDecoration(labelTfileExtension: 'Password',
+                  helperTfileExtension: register ? 'Use at least 12 characters' : null,
                   suffixIcon: IconButton(icon: Icon(obscure ? Icons.visibility : Icons.visibility_off),
                     onPressed: () => setState(() => obscure = !obscure)))),
               if (error != null) ...[
@@ -328,7 +328,7 @@ class _BusinessHomeState extends State<BusinessHome> {
  );
  Future<void> _showMoreModules()async{
   final options=modules.asMap().entries.where((e)=>e.key!=0&&e.key!=1&&e.key!=3&&e.key!=4).toList();
-  final choice=await showModalBottomSheet<int>(context:context,builder:(c)=>SafeArea(child:ListView(shrinkWrap:true,children:[
+  final choice=await showModalBottomSheet<int>(contfileExtension:context,builder:(c)=>SafeArea(child:ListView(shrinkWrap:true,children:[
    const ListTile(title:Text('More sections',style:TextStyle(fontWeight:FontWeight.bold))),
    ...options.map((e)=>ListTile(leading:const Icon(Icons.folder_open),title:Text(e.value),onTap:()=>Navigator.pop(c,e.key))),
   ])));
@@ -389,8 +389,8 @@ class _BusinessHomeState extends State<BusinessHome> {
   }
   Widget _reportMetric(String title,num value)=>Container(width:175,padding:const EdgeInsets.all(13),decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(12)),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(title,style:const TextStyle(fontSize:11,color:Colors.black54)),Text(value.toStringAsFixed(0),style:const TextStyle(fontSize:20,fontWeight:FontWeight.bold))]));
   List<String> _reportLines(){final o=_periodRows('Daily Orders'),e=_periodRows('Expenses'),b=_periodRows('Bank Received'),p=_periodRows('Vendor Payment Transactions'),v=_periodRows('Vendor Payments');final sales=_total(o,'Delivered Sales'),fees=_total(o,'Commission / Fees')+_total(o,'Shipping Fees')+_total(o,'Other Deductions'),expense=_total(e,'Expense');final ret=_periodRows('Returns & RTO');final total=_total(o,'Orders Qty'),returns=_returnQty(ret,'Return'),rto=_returnQty(ret,'RTO');final lines=<String>['DIGITECHIFIED BUSINESS MANAGER','FINANCIAL REPORT • $_periodLabel','','PROFIT & LOSS','Delivered Sales: ${money(sales)}','Marketplace Fees & Deductions: ${money(fees)}','Operating Expenses: ${money(expense)}','Operating Result before inventory cost: ${money(sales-fees-expense)}','Vendor Purchases: ${money(_total(v,'New Amount'))}','','MARKETPLACE DELIVERY SUMMARY','Platform | Orders | Delivered | Return | RTO'];for(final platform in platforms){final qty=o.where((r)=>'${r['Platform']??''}'.toLowerCase()==platform.toLowerCase()).fold<num>(0,(x,r)=>x+(num.tryParse('${r['Orders Qty']??0}')??0));final pr=_returnQty(ret.where((r)=>'${r['Platform']??''}'.toLowerCase()==platform.toLowerCase()).toList(),'Return');final rt=_returnQty(ret.where((r)=>'${r['Platform']??''}'.toLowerCase()==platform.toLowerCase()).toList(),'RTO');lines.add('$platform | $qty | ${(qty-pr-rt).clamp(0,double.infinity)} | $pr | $rt');}lines.addAll(['Total orders: $total','Total delivered: ${(total-returns-rto).clamp(0,double.infinity)}','Total returns: $returns','Total RTO: $rto','','CASH MOVEMENT','Bank Receipts: ${money(_total(b,'Amount'))}','Vendor Payments: ${money(_total(p,'Amount'))}','Operating Expenses: ${money(expense)}','Net Tracked Cash Movement: ${money(_total(b,'Amount')-_total(p,'Amount')-expense)}','Prepared by DIGITECHIFIED']);return lines;}
-  Future<void> _exportFinancialPdf()async{PdfDocument? d;try{d=PdfDocument();PdfPage? page;var y=0.0;final f=PdfStandardFont(PdfFontFamily.helvetica,10),h=PdfStandardFont(PdfFontFamily.helvetica,15,style:PdfFontStyle.bold);for(final line in _reportLines()){if(page==null||y>page.getClientSize().height-30){page=d.pages.add();y=24;}page.graphics.drawString(line.isEmpty?' ':line,line.startsWith('DIGITECHIFIED')||line.startsWith('FINANCIAL')?h:f,bounds:Rect.fromLTWH(24,y,540,20));y+=22;}final bytes=await d.save();await FileSaver.instance.saveFile(name:'DIGITECHIFIED_Financial_Report_${selectedFyStart}_${selectedMonth.toString().padLeft(2,'0')}',bytes:Uint8List.fromList(bytes),ext:'pdf',mimeType:MimeType.pdf);}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('PDF export failed: $e')));}finally{d?.dispose();}}
-  Future<void> _exportFinancialExcel()async{try{final book=Excel.createExcel(),sheet=book['DIGITECHIFIED Report'];sheet.appendRow([TextCellValue('DIGITECHIFIED BUSINESS MANAGER')]);sheet.appendRow([TextCellValue('Financial Report • $_periodLabel')]);sheet.appendRow([TextCellValue('Report Item'),TextCellValue('Value')]);for(final line in _reportLines().skip(3)){if(line.isEmpty)continue;final p=line.split(': ');sheet.appendRow([TextCellValue(p.first),TextCellValue(p.length>1?p.sublist(1).join(': '):'')]);}final bytes=book.encode();if(bytes!=null)await FileSaver.instance.saveFile(name:'DIGITECHIFIED_Financial_Report_${selectedFyStart}_${selectedMonth.toString().padLeft(2,'0')}',bytes:Uint8List.fromList(bytes),ext:'xlsx',mimeType:MimeType.microsoftExcel);}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Excel export failed: $e')));}}
+  Future<void> _exportFinancialPdf()async{PdfDocument? d;try{d=PdfDocument();PdfPage? page;var y=0.0;final f=PdfStandardFont(PdfFontFamily.helvetica,10),h=PdfStandardFont(PdfFontFamily.helvetica,15,style:PdfFontStyle.bold);for(final line in _reportLines()){if(page==null||y>page.getClientSize().height-30){page=d.pages.add();y=24;}page.graphics.drawString(line.isEmpty?' ':line,line.startsWith('DIGITECHIFIED')||line.startsWith('FINANCIAL')?h:f,bounds:Rect.fromLTWH(24,y,540,20));y+=22;}final bytes=await d.save();await FileSaver.instance.saveFile(name:'DIGITECHIFIED_Financial_Report_${selectedFyStart}_${selectedMonth.toString().padLeft(2,'0')}',bytes:Uint8List.fromList(bytes),fileExtension:'pdf',mimeType:MimeType.pdf);}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('PDF export failed: $e')));}finally{d?.dispose();}}
+  Future<void> _exportFinancialExcel()async{try{final book=Excel.createExcel(),sheet=book['DIGITECHIFIED Report'];sheet.appendRow([TextCellValue('DIGITECHIFIED BUSINESS MANAGER')]);sheet.appendRow([TextCellValue('Financial Report • $_periodLabel')]);sheet.appendRow([TextCellValue('Report Item'),TextCellValue('Value')]);for(final line in _reportLines().skip(3)){if(line.isEmpty)continue;final p=line.split(': ');sheet.appendRow([TextCellValue(p.first),TextCellValue(p.length>1?p.sublist(1).join(': '):'')]);}final bytes=book.encode();if(bytes!=null)await FileSaver.instance.saveFile(name:'DIGITECHIFIED_Financial_Report_${selectedFyStart}_${selectedMonth.toString().padLeft(2,'0')}',bytes:Uint8List.fromList(bytes),fileExtension:'xlsx',mimeType:MimeType.microsoftExcel);}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Excel export failed: $e')));}}
   Future<void> _exportPdf(String module)async{
    PdfDocument? d;
    try{
@@ -411,7 +411,7 @@ class _BusinessHomeState extends State<BusinessHome> {
       }
     }
     final bytes=await d.save();
-    await FileSaver.instance.saveFile(name:'DIGITECHIFIED_${module.replaceAll(' ','_')}_${selectedFyStart}_${selectedMonth.toString().padLeft(2,'0')}',bytes:Uint8List.fromList(bytes),ext:'pdf',mimeType:MimeType.pdf);
+    await FileSaver.instance.saveFile(name:'DIGITECHIFIED_${module.replaceAll(' ','_')}_${selectedFyStart}_${selectedMonth.toString().padLeft(2,'0')}',bytes:Uint8List.fromList(bytes),fileExtension:'pdf',mimeType:MimeType.pdf);
    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('PDF export failed: $e')));}finally{d?.dispose();}
   }
 
@@ -558,7 +558,7 @@ class _BusinessHomeState extends State<BusinessHome> {
     const SizedBox(height:14),
     TextField(controller:_dailySearchController, onChanged:(_){setState(()=>_dailyPage=0);},
      decoration:InputDecoration(
-      hintText:'Search date, platform, firm, order ID, SKU, brand, customer...',
+      hintTfileExtension:'Search date, platform, firm, order ID, SKU, brand, customer...',
       prefixIcon:const Icon(Icons.search,color:Color(0xFF9B7417)),
       suffixIcon:_dailySearchController.text.isEmpty?null:IconButton(icon:const Icon(Icons.close),onPressed:(){_dailySearchController.clear();setState(()=>_dailyPage=0);}),
       filled:true,fillColor:Colors.white,border:OutlineInputBorder(borderRadius:BorderRadius.circular(14),borderSide:const BorderSide(color:Color(0xFFE5DFD2))),
@@ -663,7 +663,7 @@ class _BusinessHomeState extends State<BusinessHome> {
   if(_pdfImporting)return;
   String platform='Myntra';
   final selectedPlatform=await showDialog<String>(
-   context:context,
+   contfileExtension:context,
    builder:(ctx)=>StatefulBuilder(builder:(ctx,setDialog)=>Dialog(
     backgroundColor:const Color(0xFFF9F7F1),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(24)),
     child:Padding(padding:const EdgeInsets.all(24),child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.stretch,children:[
@@ -675,7 +675,7 @@ class _BusinessHomeState extends State<BusinessHome> {
       ])),
      ]),
      const SizedBox(height:22),
-     DropdownButtonFormField<String>(value:platform,isExpanded:true,decoration:const InputDecoration(labelText:'Marketplace',prefixIcon:Icon(Icons.storefront_outlined)),items:const ['Myntra','Meesho'].map((v)=>DropdownMenuItem(value:v,child:Text(v))).toList(),onChanged:(v){if(v!=null)setDialog(()=>platform=v);}),
+     DropdownButtonFormField<String>(value:platform,isExpanded:true,decoration:const InputDecoration(labelTfileExtension:'Marketplace',prefixIcon:Icon(Icons.storefront_outlined)),items:const ['Myntra','Meesho'].map((v)=>DropdownMenuItem(value:v,child:Text(v))).toList(),onChanged:(v){if(v!=null)setDialog(()=>platform=v);}),
      const SizedBox(height:12),
      Container(padding:const EdgeInsets.all(12),decoration:BoxDecoration(color:const Color(0xFFF1EBDD),borderRadius:BorderRadius.circular(12)),child:const Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
       Icon(Icons.info_outline,color:Color(0xFF8A6818),size:18),SizedBox(width:8),Expanded(child:Text('Only shipping labels are counted. Myntra brand will be saved as JIPROSTORE.',style:TextStyle(fontSize:12,color:Color(0xFF5F512F)))),
@@ -698,7 +698,7 @@ class _BusinessHomeState extends State<BusinessHome> {
    return;
   }
   setState(()=>_pdfImporting=true);
-  showDialog<void>(context:context,barrierDismissible:false,builder:(ctx)=>PopScope(canPop:false,child:Dialog(
+  showDialog<void>(contfileExtension:context,barrierDismissible:false,builder:(ctx)=>PopScope(canPop:false,child:Dialog(
    backgroundColor:const Color(0xFFF9F7F1),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(22)),
    child:Padding(padding:const EdgeInsets.all(26),child:Column(mainAxisSize:MainAxisSize.min,children:[
     const SizedBox(width:42,height:42,child:CircularProgressIndicator(strokeWidth:3,color:Color(0xFFD6A52A))),
@@ -744,7 +744,7 @@ class _BusinessHomeState extends State<BusinessHome> {
  }
 
  Future<void> _quickAdd()async{
-  final choice=await showModalBottomSheet<String>(context:context,builder:(c)=>SafeArea(child:Column(mainAxisSize:MainAxisSize.min,children:[
+  final choice=await showModalBottomSheet<String>(contfileExtension:context,builder:(c)=>SafeArea(child:Column(mainAxisSize:MainAxisSize.min,children:[
    const ListTile(title:Text('Quick Entry',style:TextStyle(fontWeight:FontWeight.bold))),
    ...['Daily Orders','Returns & RTO','Bank Received','Expenses'].map((v)=>ListTile(title:Text(v),leading:const Icon(Icons.add_circle_outline),onTap:()=>Navigator.pop(c,v))),
   ])));
@@ -757,7 +757,7 @@ class _BusinessHomeState extends State<BusinessHome> {
   if(module=='Vendor Payments'&&controllers.containsKey('Month')){final now=DateTime.now();controllers['Month']!.text='${now.year}-${now.month.toString().padLeft(2,'0')}';controllers['Payment Date']!.text=now.toIso8601String().substring(0,10);}
   if(controllers.containsKey('Platform'))controllers['Platform']!.text=module=='Returns & RTO'?'Meesho':'Myntra';
   if(controllers.containsKey('Brand'))controllers['Brand']!.text='JIPROSTORE';
-  final ok=await showDialog<bool>(context:context,builder:(ctx)=>Dialog(
+  final ok=await showDialog<bool>(contfileExtension:context,builder:(ctx)=>Dialog(
    backgroundColor:const Color(0xFFF9F7F1),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(24)),
    child:SizedBox(width:MediaQuery.of(ctx).size.width*.9,height:MediaQuery.of(ctx).size.height*.78,child:Padding(padding:const EdgeInsets.all(22),child:Column(mainAxisSize:MainAxisSize.max,crossAxisAlignment:CrossAxisAlignment.stretch,children:[
     Row(children:[Container(width:44,height:44,decoration:BoxDecoration(color:const Color(0xFF111111),borderRadius:BorderRadius.circular(13)),child:const Icon(Icons.edit_note_rounded,color:Color(0xFFFFC84D),size:26)),const SizedBox(width:12),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('Add $module',style:const TextStyle(fontSize:19,fontWeight:FontWeight.bold)),Text(module=='Bank Received'?'Record marketplace bank receipt':'Enter $module details below',style:const TextStyle(color:Colors.black54,fontSize:12))]))]),
@@ -831,10 +831,10 @@ class _BusinessHomeState extends State<BusinessHome> {
     onTap:()async{
      final now=DateTime.now();
      final initial=selectedDate??now;
-     final picked=await showDatePicker(context:context,initialDate:initial,firstDate:DateTime(2000),lastDate:DateTime(2100),builder:(ctx,child)=>Theme(data:Theme.of(ctx).copyWith(colorScheme:const ColorScheme.light(primary:Color(0xFFD6A52A),onPrimary:Colors.black)),child:child!));
+     final picked=await showDatePicker(contfileExtension:context,initialDate:initial,firstDate:DateTime(2000),lastDate:DateTime(2100),builder:(ctx,child)=>Theme(data:Theme.of(ctx).copyWith(colorScheme:const ColorScheme.light(primary:Color(0xFFD6A52A),onPrimary:Colors.black)),child:child!));
      if(picked!=null){controller.text='${picked.year.toString().padLeft(4,'0')}-${picked.month.toString().padLeft(2,'0')}-${picked.day.toString().padLeft(2,'0')}';if(mounted)setState((){});}
     },
-    child:InputDecorator(decoration:InputDecoration(labelText:field,prefixIcon:const Icon(Icons.calendar_month_rounded),suffixIcon:const Icon(Icons.arrow_drop_down)),child:Text(controller.text.isEmpty?'Choose $field':controller.text,style:TextStyle(color:controller.text.isEmpty?Colors.black45:Colors.black87))),
+    child:InputDecorator(decoration:InputDecoration(labelTfileExtension:field,prefixIcon:const Icon(Icons.calendar_month_rounded),suffixIcon:const Icon(Icons.arrow_drop_down)),child:Text(controller.text.isEmpty?'Choose $field':controller.text,style:TextStyle(color:controller.text.isEmpty?Colors.black45:Colors.black87))),
    ));
   }
   final options = _optionsFor(module, field);
@@ -843,7 +843,7 @@ class _BusinessHomeState extends State<BusinessHome> {
    child: DropdownButtonFormField<String>(
     initialValue: options.contains(controller.text) ? controller.text : null,
     isExpanded: true,
-    decoration: InputDecoration(labelText: 'Choose $field (optional)', prefixIcon: const Icon(Icons.arrow_drop_down_circle_outlined)),
+    decoration: InputDecoration(labelTfileExtension: 'Choose $field (optional)', prefixIcon: const Icon(Icons.arrow_drop_down_circle_outlined)),
     hint: const Text('Select or type below'),
     items: options.map((v) => DropdownMenuItem(value: v, child: Text(v, overflow: TextOverflow.ellipsis))).toList(),
     onChanged: (value) { if (value != null) controller.text = value; },
@@ -852,8 +852,8 @@ class _BusinessHomeState extends State<BusinessHome> {
   return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
    dropdown,
    TextField(controller: controller, decoration: InputDecoration(
-    labelText: options.isEmpty ? field : 'Or enter $field manually',
-    hintText: 'Enter $field',
+    labelTfileExtension: options.isEmpty ? field : 'Or enter $field manually',
+    hintTfileExtension: 'Enter $field',
     prefixIcon: _numeric(field) ? const Icon(Icons.numbers) : null,
    ), keyboardType: _numeric(field) ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text),
   ]);
@@ -865,9 +865,9 @@ class _BusinessHomeState extends State<BusinessHome> {
   final original=list[index];
   final controllers=<String,TextEditingController>{
    for(final field in fields[module]??[])
-    field:TextEditingController(text:'${original[field]??(field=='Pending Amount'?original['Amount Paid']??'':'')}')
+    field:TextEditingController(tfileExtension:'${original[field]??(field=='Pending Amount'?original['Amount Paid']??'':'')}')
   };
-  final ok=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(
+  final ok=await showDialog<bool>(contfileExtension:context,builder:(ctx)=>AlertDialog(
    title:Text('Edit $module'),
    content:SizedBox(width:520,child:SingleChildScrollView(child:Column(
     children:controllers.entries.map((e)=>Padding(
@@ -906,14 +906,14 @@ class _BusinessHomeState extends State<BusinessHome> {
   final pending=num.tryParse("${row['Closing Balance']??row['Pending Amount']??(opening+added-paidBefore)}".replaceAll(',',''))??0;
   final amountController=TextEditingController();
   final noteController=TextEditingController();
-  final ok=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(
+  final ok=await showDialog<bool>(contfileExtension:context,builder:(ctx)=>AlertDialog(
    title:Text("Record payment • ${row['Vendor Name']??'Vendor'}"),
    content:Column(mainAxisSize:MainAxisSize.min,children:[
     Align(alignment:Alignment.centerLeft,child:Text('Current pending: ₹${pending.toStringAsFixed(2)}',style:const TextStyle(fontWeight:FontWeight.bold,color:Color(0xFF8A6818)))),
     const SizedBox(height:12),
-    TextField(controller:amountController,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'Payment amount',prefixText:'₹ ')),
+    TextField(controller:amountController,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelTfileExtension:'Payment amount',prefixTfileExtension:'₹ ')),
     const SizedBox(height:10),
-    TextField(controller:noteController,decoration:const InputDecoration(labelText:'Payment note (optional)')),
+    TextField(controller:noteController,decoration:const InputDecoration(labelTfileExtension:'Payment note (optional)')),
    ]),
    actions:[
     TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),
@@ -1001,7 +1001,7 @@ class _BusinessHomeState extends State<BusinessHome> {
    sheet.appendRow(cols.map((e)=>TextCellValue(e)).toList());
    for(final row in data){sheet.appendRow(cols.map((e)=>TextCellValue('${row[e]??''}')).toList());}
    final bytes=book.encode();if(bytes==null)return;
-   await FileSaver.instance.saveFile(name:'DIGITECHIFIED_${module.replaceAll(' ','_')}_${selectedFyStart}_${selectedMonth.toString().padLeft(2,'0')}',bytes:Uint8List.fromList(bytes),ext:'xlsx',mimeType:MimeType.microsoftExcel);
+   await FileSaver.instance.saveFile(name:'DIGITECHIFIED_${module.replaceAll(' ','_')}_${selectedFyStart}_${selectedMonth.toString().padLeft(2,'0')}',bytes:Uint8List.fromList(bytes),fileExtension:'xlsx',mimeType:MimeType.microsoftExcel);
    if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('DIGITECHIFIED Excel export ready')));
   }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Export failed: $e')));}
  }
