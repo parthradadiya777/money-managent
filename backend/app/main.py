@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from uuid import UUID, uuid4
 from fastapi import Depends, FastAPI, Header, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
@@ -270,7 +271,7 @@ def reset_partner_password(tenant_id: UUID, data: PasswordResetIn, admin: Princi
     user.password_hash = hash_password(data.new_password)
     security_state = db.get(UserSecurity, user.id)
     if security_state:
-        security_state.tokens_valid_after = __import__("datetime").datetime.now(__import__("datetime").timezone.utc)
+        security_state.tokens_valid_after = datetime.now(timezone.utc).replace(microsecond=0)
     else:
         db.add(UserSecurity(user_id=user.id, tokens_valid_after=__import__("datetime").datetime.now(__import__("datetime").timezone.utc)))
     _write_admin_log(db, admin.id, tenant_id, "password_reset", f"Password reset for {user.email}")
