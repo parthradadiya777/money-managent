@@ -53,7 +53,7 @@ const Map<String,List<String>> fields = {
  'Vendor Payments':['Month','Firm Name','Vendor Name','Opening Balance','New Amount','Closing Balance','Amount Paid','Payment Date','Payment Mode','Notes'],
  'Bank Received':['Date','Platform','Amount','Details','Brand'],
  'Expenses':['Date','Expense','Details','Payment Mode'],
- 'Vendor Payment Transactions':['Date','Month','Firm Name','Vendor Name','Amount','Payment Mode','Notes'],
+ 'Vendor Payment Transactions':['Date','Firm Name','Vendor Name','Amount','Payment Mode','Notes'],
 };
 
 
