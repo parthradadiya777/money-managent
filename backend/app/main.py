@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from .config import settings
 from .database import Base, engine, get_db
-from .models import Tenant, User, Partner, BusinessRecord, AuditLog, AdminAccessLog
+from .models import Tenant, User, Partner, BusinessRecord, AuditLog, AdminAccessLog, UserSecurity
 from .schemas import RegisterIn, LoginIn, PartnerCreateIn, PartnerUpdateIn, PasswordResetIn, RecordIn, RecordBatchIn
 from .security import hash_password, verify_password, create_access_token, decode_access_token
 
@@ -87,6 +87,11 @@ def current_user(authorization: str | None = Header(default=None), db: Session =
     actor = db.get(User, user_id)
     if not actor:
         raise HTTPException(status_code=401, detail="User not found")
+    security_state = db.get(UserSecurity, user_id)
+    if security_state:
+        issued_at = claims.get("iat")
+        if issued_at is None or float(issued_at) < security_state.tokens_valid_after.timestamp():
+            raise HTTPException(status_code=401, detail="Session expired after a password change. Please log in again.")
 
     is_admin = actor.role == "super_admin"
     impersonating = bool(claims.get("imp"))
@@ -263,6 +268,11 @@ def reset_partner_password(tenant_id: UUID, data: PasswordResetIn, admin: Princi
     if not partner or not user:
         raise HTTPException(status_code=404, detail="Partner not found")
     user.password_hash = hash_password(data.new_password)
+    security_state = db.get(UserSecurity, user.id)
+    if security_state:
+        security_state.tokens_valid_after = __import__("datetime").datetime.now(__import__("datetime").timezone.utc)
+    else:
+        db.add(UserSecurity(user_id=user.id, tokens_valid_after=__import__("datetime").datetime.now(__import__("datetime").timezone.utc)))
     _write_admin_log(db, admin.id, tenant_id, "password_reset", f"Password reset for {user.email}")
     db.commit()
     return {"ok": True, "message": "Partner password updated"}
