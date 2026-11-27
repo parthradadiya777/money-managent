@@ -291,13 +291,13 @@ class _BusinessHomeState extends State<BusinessHome> {
    final icons=[Icons.dashboard_rounded,Icons.shopping_bag,Icons.assignment_return,Icons.payments,Icons.account_balance,Icons.receipt_long,Icons.assessment,Icons.payment];
    final active=selected==i;
    return ListTile(dense:true,selected:active,selectedTileColor:const Color(0xFF292313),leading:Icon(icons[i],color:active?const Color(0xFFFFC84D):const Color(0xFFB9B9B9),size:19),
-    title:Text(modules[i],style:TextStyle(color:active?Colors.white:const Color(0xFFB9C7E5),fontSize:13,fontWeight:active?FontWeight.w600:FontWeight.normal)),onTap:()=>setState(()=>selected=i));
+    title:Text(_moduleTitle(modules[i]),style:TextStyle(color:active?Colors.white:const Color(0xFFB9C7E5),fontSize:13,fontWeight:active?FontWeight.w600:FontWeight.normal)),onTap:()=>setState(()=>selected=i));
   })),
   const Padding(padding:EdgeInsets.all(16),child:Text('Multi Marketplace • Multi GST',style:TextStyle(color:Color(0xFF999999),fontSize:11))),
  ]));
  Widget _topBar()=>Container(height:70,padding:const EdgeInsets.symmetric(horizontal:22),color:Colors.white,child:Row(children:[
   if(MediaQuery.of(context).size.width<=850)const Icon(Icons.menu_rounded,color:Color(0xFF263B67)),
-  const SizedBox(width:8),Expanded(child:Text(selected==0?'Business Overview':modules[selected],style:const TextStyle(fontSize:19,fontWeight:FontWeight.bold,color:Color(0xFF17233D)))),
+  const SizedBox(width:8),Expanded(child:Text(selected==0?'Business Overview':_moduleTitle(modules[selected]),style:const TextStyle(fontSize:19,fontWeight:FontWeight.bold,color:Color(0xFF17233D)))),
   Chip(avatar:Icon(Icons.circle,size:9,color:_syncMessage=='Cloud synced'?Colors.green:Colors.orange),
    label:Text(_syncMessage ?? (box.get('cloudToken') != null ? 'Cloud sync' : 'Local data'))),
   if (CloudSyncService.configured && box.get('cloudToken') != null)
@@ -335,8 +335,17 @@ class _BusinessHomeState extends State<BusinessHome> {
   if(choice!=null&&mounted)setState(()=>selected=choice);
  }
 
+  String _moduleTitle(String module)=>module=='Vendor Payment Transactions'?'Vendor Pending Payment':module;
   String _fyLabel(int y)=>'$y-${(y+1).toString().substring(2)}';
-  DateTime? _dateOf(Map r){final v=(r['Month']??r['Date']??r['Payment Date']??'').toString().trim();if(v.isEmpty||v.toLowerCase().contains('not detected'))return null;return DateTime.tryParse(v.length==7?'$v-01':v);}
+  DateTime? _dateOf(Map r){
+   for(final key in ['Date','Payment Date','Month']){
+    final value='${r[key]??''}'.trim();
+    if(value.isEmpty||value.toLowerCase().contains('not detected'))continue;
+    final parsed=DateTime.tryParse(value.length==7?'$value-01':value);
+    if(parsed!=null)return parsed;
+   }
+   return null;
+  }
   List<Map> _periodRows(String module)=>rows(module).where((r){final d=_dateOf(r);if(d==null)return selectedMonth==0;final fy=d.month>=4?d.year:d.year-1;return fy==selectedFyStart&&(selectedMonth==0||d.month==selectedMonth);}).toList();
   String get _periodLabel=>selectedMonth==0?'FY ${_fyLabel(selectedFyStart)}':'${['','January','February','March','April','May','June','July','August','September','October','November','December'][selectedMonth]} ${selectedFyStart+(selectedMonth>=4?0:1)}';
   Widget _periodFilterBar(){
@@ -733,7 +742,7 @@ class _BusinessHomeState extends State<BusinessHome> {
      const SizedBox(width:8),
      recentCard('Expenses',Icons.receipt_long,recentExpenses,5,(e)=>'${e['Expense']??0} • ${e['Details']??''}',(e)=>'${e['Date']??''}'),
      const SizedBox(width:8),
-     recentCard('Vendor Payment Transactions',Icons.payments,recentPayments,7,(e)=>'${e['Vendor Name']??'Vendor'} • ₹${e['Amount']??0}',(e)=>'${e['Date']??''} • ${e['Payment Mode']??''}'),
+     recentCard('Vendor Pending Payment',Icons.payments,recentPayments,7,(e)=>'${e['Vendor Name']??'Vendor'} • ₹${e['Amount']??0}',(e)=>'${e['Date']??''} • ${e['Payment Mode']??''}'),
     ])),
    ]));
   });
@@ -981,13 +990,13 @@ class _BusinessHomeState extends State<BusinessHome> {
   final controllers=<String,TextEditingController>{};
   for(final f in fields[module]??[])controllers[f]=TextEditingController();
   for(final f in ['Date','Purchase Date','Payment Date','Settlement Date']){if(controllers.containsKey(f))controllers[f]!.text=DateTime.now().toIso8601String().substring(0,10);}
-  if(module=='Vendor Payments'&&controllers.containsKey('Month')){final now=DateTime.now();controllers['Month']!.text='${now.year}-${now.month.toString().padLeft(2,'0')}';controllers['Payment Date']!.text=now.toIso8601String().substring(0,10);}
+  if((module=='Vendor Payments'||module=='Vendor Payment Transactions')&&controllers.containsKey('Month')){final now=DateTime.now();controllers['Month']!.text='${now.year}-${now.month.toString().padLeft(2,'0')}';if(controllers.containsKey('Payment Date'))controllers['Payment Date']!.text=now.toIso8601String().substring(0,10);}
   if(controllers.containsKey('Platform'))controllers['Platform']!.text=module=='Returns & RTO'?'Meesho':'Myntra';
   if(controllers.containsKey('Brand'))controllers['Brand']!.text='JIPROSTORE';
   final ok=await showDialog<bool>(context:context,builder:(ctx)=>Dialog(
    backgroundColor:const Color(0xFFF9F7F1),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(24)),
    child:SizedBox(width:MediaQuery.of(ctx).size.width*.9,height:MediaQuery.of(ctx).size.height*.78,child:Padding(padding:const EdgeInsets.all(22),child:Column(mainAxisSize:MainAxisSize.max,crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-    Row(children:[Container(width:44,height:44,decoration:BoxDecoration(color:const Color(0xFF111111),borderRadius:BorderRadius.circular(13)),child:const Icon(Icons.edit_note_rounded,color:Color(0xFFFFC84D),size:26)),const SizedBox(width:12),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('Add $module',style:const TextStyle(fontSize:19,fontWeight:FontWeight.bold)),Text(module=='Bank Received'?'Record marketplace bank receipt':'Enter $module details below',style:const TextStyle(color:Colors.black54,fontSize:12))]))]),
+    Row(children:[Container(width:44,height:44,decoration:BoxDecoration(color:const Color(0xFF111111),borderRadius:BorderRadius.circular(13)),child:const Icon(Icons.edit_note_rounded,color:Color(0xFFFFC84D),size:26)),const SizedBox(width:12),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('Add ${_moduleTitle(module)}',style:const TextStyle(fontSize:19,fontWeight:FontWeight.bold)),Text(module=='Bank Received'?'Record marketplace bank receipt':'Enter $module details below',style:const TextStyle(color:Colors.black54,fontSize:12))]))]),
     const SizedBox(height:16),
     Expanded(child:SingleChildScrollView(child:Column(children:controllers.entries.map((e)=>Padding(padding:const EdgeInsets.only(bottom:12),child:_formField(module,e.key,e.value))).toList()))),
     const SizedBox(height:10),
@@ -1051,7 +1060,7 @@ class _BusinessHomeState extends State<BusinessHome> {
   return const [];
  }
  Widget _formField(String module, String field, TextEditingController controller) {
-  if((module=='Vendor Payments' && field=='Payment Date') || ((module=='Expenses' || module=='Returns & RTO' || module=='Bank Received') && field=='Date')){
+  if((module=='Vendor Payments' && field=='Payment Date') || ((module=='Expenses' || module=='Returns & RTO' || module=='Bank Received' || module=='Vendor Payment Transactions') && field=='Date')){
    DateTime? selectedDate;
    try{selectedDate=DateTime.tryParse(controller.text);}catch(_){}
    return Padding(padding:const EdgeInsets.only(bottom:12),child:InkWell(
