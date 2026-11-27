@@ -11,6 +11,7 @@ BASE = os.environ.get("API_BASE_URL", "https://digitechified-bm-test-api.onrende
 RUN_ID = os.environ.get("GITHUB_RUN_ID", str(int(time.time())))
 ATTEMPT = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
 EMAIL = f"smoke-{RUN_ID}-{ATTEMPT}@example.com"
+EMAIL_B = f"smoke-partner-b-{RUN_ID}-{ATTEMPT}@example.com"
 PASSWORD = "SmokeTest!" + secrets.token_urlsafe(18)
 RECORD_ID = f"smoke-{RUN_ID}-{ATTEMPT}"
 
@@ -67,14 +68,28 @@ def main():
     }, token=token)
     assert saved.get("saved") == 1 or saved.get("ok") is True or saved.get("count") == 1, saved
 
+    # A second synthetic partner must never see or delete the first partner's record.
+    _, auth_b = call("POST", "/api/auth/register", {
+        "business_name": "Demo Smoke Partner B",
+        "email": EMAIL_B,
+        "password": PASSWORD,
+    })
+    token_b = auth_b["access_token"]
     _, listed = call("GET", "/api/records", token=token)
     assert any(x["record_id"] == RECORD_ID for x in listed.get("records", [])), listed
+    _, partner_b_records = call("GET", "/api/records", token=token_b)
+    assert not any(x["record_id"] == RECORD_ID for x in partner_b_records.get("records", [])), partner_b_records
+    try:
+        call("DELETE", "/api/records/" + quote(RECORD_ID, safe=""), token=token_b)
+        raise AssertionError("Partner B unexpectedly deleted Partner A's record")
+    except RuntimeError as exc:
+        assert "404" in str(exc), str(exc)
 
     call("DELETE", "/api/records/" + quote(RECORD_ID, safe=""), token=token)
     _, after_delete = call("GET", "/api/records", token=token)
     assert not any(x["record_id"] == RECORD_ID for x in after_delete.get("records", [])), after_delete
 
-    print("PASS: test-only partner registration, profile, tenant record create/read/delete")
+    print("PASS: partner registration, profile, tenant-isolated record create/read/delete")
     print("Synthetic account:", EMAIL)
 
 
