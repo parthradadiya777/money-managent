@@ -700,7 +700,7 @@ class _BusinessHomeState extends State<BusinessHome> {
    ]);
   }
   Widget _reportMetric(String title,num value)=>Container(width:175,padding:const EdgeInsets.all(13),decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(12)),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(title,style:const TextStyle(fontSize:11,color:Colors.black54)),Text(value.toStringAsFixed(0),style:const TextStyle(fontSize:20,fontWeight:FontWeight.bold))]));
-  List<String> _reportLines(){final o=_periodRows('Daily Orders'),e=_periodRows('Expenses'),b=_periodRows('Bank Received'),p=_periodRows('Vendor Payment Transactions'),v=_periodRows('Vendor Payments');final sales=_total(o,'Delivered Sales'),fees=_total(o,'Commission / Fees')+_total(o,'Shipping Fees')+_total(o,'Other Deductions'),expense=_total(e,'Expense');final ret=_periodRows('Returns & RTO');final total=_total(o,'Orders Qty'),returns=_returnQty(ret,'Return'),rto=_returnQty(ret,'RTO');final lines=<String>['DIGITECHIFIED BUSINESS MANAGER','FINANCIAL REPORT • $_periodLabel','','PROFIT & LOSS','Delivered Sales: ${money(sales)}','Marketplace Fees & Deductions: ${money(fees)}','Operating Expenses: ${money(expense)}','Operating Result before inventory cost: ${money(sales-fees-expense)}','Vendor Purchases: ${money(_total(v,'New Amount'))}','','MARKETPLACE DELIVERY SUMMARY','Platform | Orders | Delivered | Return | RTO'];for(final platform in platforms){final qty=o.where((r)=>'${r['Platform']??''}'.toLowerCase()==platform.toLowerCase()).fold<num>(0,(x,r)=>x+(num.tryParse('${r['Orders Qty']??0}')??0));final pr=_returnQty(ret.where((r)=>'${r['Platform']??''}'.toLowerCase()==platform.toLowerCase()).toList(),'Return');final rt=_returnQty(ret.where((r)=>'${r['Platform']??''}'.toLowerCase()==platform.toLowerCase()).toList(),'RTO');lines.add('$platform | $qty | ${(qty-pr-rt).clamp(0,double.infinity)} | $pr | $rt');}lines.addAll(['Total orders: $total','Total delivered: ${(total-returns-rto).clamp(0,double.infinity)}','Total returns: $returns','Total RTO: $rto','','CASH MOVEMENT','Bank Receipts: ${money(_total(b,'Amount'))}','Vendor Payments: ${money(_total(p,'Amount'))}','Operating Expenses: ${money(expense)}','Net Tracked Cash Movement: ${money(_total(b,'Amount')-_total(p,'Amount')-expense)}','Prepared by DIGITECHIFIED']);return lines;}
+  List<String> _reportLines(){final o=_periodRows('Daily Orders'),e=_periodRows('Expenses'),b=_periodRows('Bank Received'),p=_periodRows('Vendor Payment Transactions'),v=_periodRows('Vendor Payments');final sales=_total(o,'Delivered Sales'),fees=_total(o,'Commission / Fees')+_total(o,'Shipping Fees')+_total(o,'Other Deductions'),expense=_total(e,'Expense');final ret=_periodRows('Returns & RTO');final total=_total(o,'Orders Qty'),returns=_returnQty(ret,'Return'),rto=_returnQty(ret,'RTO');final opening=_cashOpeningBalance();final closing=opening+_total(b,'Amount')-_total(p,'Amount')-expense;final lines=<String>['DIGITECHIFIED BUSINESS MANAGER','FINANCIAL REPORT • $_periodLabel','','PROFIT & LOSS','Delivered Sales: ${money(sales)}','Marketplace Fees & Deductions: ${money(fees)}','Operating Expenses: ${money(expense)}','Operating Result before inventory cost: ${money(sales-fees-expense)}','Vendor Purchases: ${money(_total(v,'New Amount'))}','','MARKETPLACE DELIVERY SUMMARY','Platform | Orders | Delivered | Return | RTO'];for(final platform in platforms){final qty=o.where((r)=>'${r['Platform']??''}'.toLowerCase()==platform.toLowerCase()).fold<num>(0,(x,r)=>x+(num.tryParse('${r['Orders Qty']??0}')??0));final pr=_returnQty(ret.where((r)=>'${r['Platform']??''}'.toLowerCase()==platform.toLowerCase()).toList(),'Return');final rt=_returnQty(ret.where((r)=>'${r['Platform']??''}'.toLowerCase()==platform.toLowerCase()).toList(),'RTO');lines.add('$platform | $qty | ${(qty-pr-rt).clamp(0,double.infinity)} | $pr | $rt');}lines.addAll(['Total orders: $total','Total delivered: ${(total-returns-rto).clamp(0,double.infinity)}','Total returns: $returns','Total RTO: $rto','','CASH MOVEMENT','Opening Cash / Bank: ${money(opening)}','Bank Receipts: ${money(_total(b,'Amount'))}','Vendor Payments: ${money(_total(p,'Amount'))}','Operating Expenses: ${money(expense)}','Net Tracked Cash Movement: ${money(_total(b,'Amount')-_total(p,'Amount')-expense)}','Estimated Closing Cash / Bank: ${money(closing)}','Prepared by DIGITECHIFIED']);return lines;}
   Future<void> _exportFinancialPdf() async {
     PdfDocument? doc;
     try {
@@ -733,6 +733,8 @@ class _BusinessHomeState extends State<BusinessHome> {
       final delivered = (orders - returns - rto).clamp(0, double.infinity);
       final pending = vendors.fold<num>(0, (v, r) =>
         v + (num.tryParse('${r['Closing Balance'] ?? r['Pending Amount'] ?? 0}'.toString().replaceAll(',', '')) ?? 0));
+      final openingCash = _cashOpeningBalance();
+      final closingCash = openingCash + bankTotal - paymentTotal - expenseTotal;
 
       late PdfPage page;
       late Size pageSize;
@@ -810,17 +812,20 @@ class _BusinessHomeState extends State<BusinessHome> {
       addPage(2);
       y = 100;
       y = section(y, 'CASH FLOW SUMMARY');
-      y = line(y, 'Bank receipts recorded', money(bankTotal));
-      y = line(y, 'Vendor payments made', money(paymentTotal));
-      y = line(y, 'Operating expenses recorded', money(expenseTotal));
+      y = line(y, 'Opening cash / bank balance (incl. prior movements)', money(openingCash));
+      y = line(y, 'Bank receipts recorded in period', money(bankTotal));
+      y = line(y, 'Vendor payments made in period', money(paymentTotal));
+      y = line(y, 'Operating expenses recorded in period', money(expenseTotal));
       y = line(y, 'Net tracked cash movement', money(bankTotal - paymentTotal - expenseTotal), bold: true);
+      y = line(y, 'Estimated closing cash / bank balance', money(closingCash), bold: true);
       y += 22;
       y = section(y, 'BALANCE SHEET • RECORDED POSITION');
       y = line(y, 'Vendor payable / pending balances', money(pending));
       y = line(y, 'Vendor purchases recorded in period', money(purchases));
       y = line(y, 'Inventory opening / closing value', 'NOT RECORDED');
       y = line(y, 'Marketplace receivables / unsettled amount', 'NOT RECORDED');
-      y = line(y, 'Opening bank and cash balances', 'NOT RECORDED');
+      y = line(y, 'Opening cash / bank balance', money(openingCash));
+      y = line(y, 'Estimated closing cash / bank balance', money(closingCash));
       y = line(y, 'Loans and owner capital', 'NOT RECORDED');
       y += 16;
       page.graphics.drawRectangle(brush: PdfSolidBrush(PdfColor(245, 247, 250)),
