@@ -47,7 +47,7 @@ class BusinessManagerApp extends StatelessWidget {
 }
 
 const platforms = ['Meesho', 'Myntra', 'Flipkart', 'Amazon', 'AJIO'];
-const modules = ['Dashboard','Daily Orders','Returns & RTO','Vendor Payments','Bank Received','Expenses','Financial Reports','Vendor Payment Transactions'];
+const modules = ['Dashboard','Daily Orders','Returns & RTO','Vendor Payments','Bank Received','Expenses','Financial Reports','Vendor Payment Transactions','Opening Balances'];
 const Map<String,List<String>> fields = {
  'Daily Orders':['Date','Platform','Firm / Account','Order ID','SKU / Product','Brand','Size','Color','Orders Qty','Gross Order Value','Delivered Qty','Delivered Sales','Commission / Fees','Shipping Fees','Other Deductions','Courier','AWB / Tracking No.','Customer','Pincode','Source PDF','PDF Page'],
  'Returns & RTO':['Date','Platform','RTO / Return','Details'],
@@ -55,6 +55,7 @@ const Map<String,List<String>> fields = {
  'Bank Received':['Date','Platform','Amount','Details','Brand'],
  'Expenses':['Date','Expense','Details','Payment Mode'],
  'Vendor Payment Transactions':['Date','Firm Name','Vendor Name','Amount','Payment Mode','Notes'],
+ 'Opening Balances':['Date','Account Type','Account Name','Opening Balance','Notes'],
 };
 
 
@@ -575,9 +576,10 @@ class _BusinessHomeState extends State<BusinessHome> {
    Text('Business Manager',style:TextStyle(color:Color(0xFFB9B9B9),fontSize:12)),
   ])),
   const Divider(color:Color(0xFF333333)),
-  Expanded(child:ListView.builder(itemCount:modules.length-1,itemBuilder:(c,index){
-   final i=index>=3?index+1:index;
-   final icons=[Icons.dashboard_rounded,Icons.shopping_bag,Icons.assignment_return,Icons.payments,Icons.account_balance,Icons.receipt_long,Icons.assessment,Icons.payment];
+  Expanded(child:ListView.builder(itemCount:8,itemBuilder:(c,index){
+   const visibleModules=[0,1,2,4,5,6,7,8];
+   final i=visibleModules[index];
+   final icons=[Icons.dashboard_rounded,Icons.shopping_bag,Icons.assignment_return,Icons.payments,Icons.account_balance,Icons.receipt_long,Icons.assessment,Icons.payment,Icons.account_balance_wallet];
    final active=selected==i;
    return ListTile(dense:true,selected:active,selectedTileColor:const Color(0xFF292313),leading:Icon(icons[i],color:active?const Color(0xFFFFC84D):const Color(0xFFB9B9B9),size:19),
     title:Text(_moduleTitle(modules[i]),style:TextStyle(color:active?Colors.white:const Color(0xFFB9C7E5),fontSize:13,fontWeight:active?FontWeight.w600:FontWeight.normal)),onTap:()=>setState(()=>selected=i));
@@ -660,7 +662,7 @@ class _BusinessHomeState extends State<BusinessHome> {
   num _returnQty(List<Map> data,String type)=>data.where((r)=>'${r['RTO / Return']??''}'.toLowerCase()==type.toLowerCase()).fold<num>(0,(v,r)=>v+(num.tryParse('${r['Details']??0}'.replaceAll(',',''))??0));
   Widget _financialReportsPage(){
    final o=_periodRows('Daily Orders'),ret=_periodRows('Returns & RTO'),v=_periodRows('Vendor Payments'),b=_periodRows('Bank Received'),e=_periodRows('Expenses'),p=_periodRows('Vendor Payment Transactions');
-   final sales=_total(o,'Delivered Sales'),fees=_total(o,'Commission / Fees')+_total(o,'Shipping Fees')+_total(o,'Other Deductions'),expenses=_total(e,'Expense'),bank=_total(b,'Amount'),paid=_total(p,'Amount'),purchase=_total(v,'New Amount');
+   final sales=_total(o,'Delivered Sales'),fees=_total(o,'Commission / Fees')+_total(o,'Shipping Fees')+_total(o,'Other Deductions'),expenses=_total(e,'Expense'),bank=_total(b,'Amount'),paid=_total(p,'Amount'),purchase=_total(v,'New Amount'),opening=_total(_periodRows('Opening Balances'),'Opening Balance');
    final returns=_returnQty(ret,'Return'),rto=_returnQty(ret,'RTO'),orders=_total(o,'Orders Qty'),delivered=(orders-returns-rto).clamp(0,double.infinity);
    Widget line(String k,num n)=>Padding(padding:const EdgeInsets.symmetric(vertical:7),child:Row(children:[Expanded(child:Text(k,style:const TextStyle(fontSize:13))),Text(money(n),style:const TextStyle(fontWeight:FontWeight.w700,fontSize:13))]));
    Widget panel(String title,IconData icon,List<Widget> children)=>Card(elevation:0,color:Colors.white,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(16),side:const BorderSide(color:Color(0xFFE9E5DC))),child:Padding(padding:const EdgeInsets.all(18),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Row(children:[Icon(icon,color:const Color(0xFFB88919)),const SizedBox(width:9),Text(title,style:const TextStyle(fontSize:14,fontWeight:FontWeight.bold,letterSpacing:.3))]),const Divider(height:24),...children])));
@@ -680,9 +682,9 @@ class _BusinessHomeState extends State<BusinessHome> {
     const SizedBox(height:14),
     panel('PROFIT & LOSS SUMMARY',Icons.account_balance_wallet,[line('Delivered Sales Revenue',sales),line('Marketplace Fees & Deductions',fees),line('Operating Expenses',expenses),const Divider(height:18),line('Operating Result before inventory cost',sales-fees-expenses),line('Vendor Purchases (shown separately)',purchase),const Text('Inventory opening/closing value is not yet recorded. Vendor purchases are shown separately and not treated as Cost of Goods Sold to avoid overstating profit.',style:TextStyle(color:Colors.deepOrange,fontSize:11,height:1.4))]),
     const SizedBox(height:14),
-    panel('CASH FLOW & VENDOR PAYMENTS',Icons.payments,[line('Bank Receipts Recorded',bank),line('Vendor Payments Made',paid),line('Operating Expenses',expenses),const Divider(height:18),line('Net Tracked Cash Movement',bank-paid-expenses),Text('${p.length} vendor payment transactions • ${b.length} bank receipts • ${e.length} expense records',style:const TextStyle(fontSize:11,color:Colors.black54))]),
+    panel('CASH FLOW & VENDOR PAYMENTS',Icons.payments,[line('Opening Cash / Bank Balance',opening),line('Bank Receipts Recorded',bank),line('Vendor Payments Made',paid),line('Operating Expenses',expenses),const Divider(height:18),line('Net Tracked Cash Movement',bank-paid-expenses),line('Estimated Closing Cash / Bank',opening+bank-paid-expenses),Text('${p.length} vendor payment transactions • ${b.length} bank receipts • ${e.length} expense records',style:const TextStyle(fontSize:11,color:Colors.black54))]),
     const SizedBox(height:14),
-    panel('BALANCE SHEET CHECKLIST',Icons.account_balance,[const Text('To produce a complete balance sheet, enter opening bank/cash, inventory value, receivables, loans and owner capital. The app will not invent missing balances.',style:TextStyle(fontSize:12,color:Colors.black54,height:1.5))])
+    panel('BALANCE SHEET CHECKLIST',Icons.account_balance,[line('Opening Cash / Bank entered',opening),const Text('Opening balances are entered separately by Cash or Bank account. Inventory, receivables, loans and owner capital still need their own records before a complete balance sheet can be prepared.',style:TextStyle(fontSize:12,color:Colors.black54,height:1.5))])
    ]);
   }
   Widget _reportMetric(String title,num value)=>Container(width:175,padding:const EdgeInsets.all(13),decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(12)),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(title,style:const TextStyle(fontSize:11,color:Colors.black54)),Text(value.toStringAsFixed(0),style:const TextStyle(fontSize:20,fontWeight:FontWeight.bold))]));
@@ -1332,6 +1334,7 @@ class _BusinessHomeState extends State<BusinessHome> {
   for(final f in ['Date','Purchase Date','Payment Date','Settlement Date']){if(controllers.containsKey(f))controllers[f]!.text=DateTime.now().toIso8601String().substring(0,10);}
   if((module=='Vendor Payments'||module=='Vendor Payment Transactions')&&controllers.containsKey('Month')){final now=DateTime.now();controllers['Month']!.text='${now.year}-${now.month.toString().padLeft(2,'0')}';if(controllers.containsKey('Payment Date'))controllers['Payment Date']!.text=now.toIso8601String().substring(0,10);}
   if(controllers.containsKey('Platform'))controllers['Platform']!.text=module=='Returns & RTO'?'Meesho':'Myntra';
+  if(module=='Opening Balances' && controllers.containsKey('Account Type'))controllers['Account Type']!.text='Bank';
   if(controllers.containsKey('Brand'))controllers['Brand']!.text='JIPROSTORE';
   final ok=await showDialog<bool>(context:context,builder:(ctx)=>Dialog(
    backgroundColor:const Color(0xFFF9F7F1),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(24)),
@@ -1395,12 +1398,13 @@ class _BusinessHomeState extends State<BusinessHome> {
   if (normalized == 'status') return ['Pending', 'Completed', 'On Hold', 'Cancelled'];
   if (normalized.contains('payment mode')) return ['Bank Transfer', 'UPI', 'Cash', 'Cheque', 'Credit', 'Other'];
   if (normalized == 'record type') return ['Firm', 'Platform', 'Vendor', 'Bank Account', 'Expense Category'];
+  if (normalized == 'account type') return ['Cash', 'Bank'];
   if (normalized == 'state') return ['Gujarat', 'Maharashtra', 'Rajasthan', 'Delhi', 'Karnataka', 'Other'];
   if (normalized == 'gst %') return ['0', '5', '12', '18', '28'];
   return const [];
  }
  Widget _formField(String module, String field, TextEditingController controller) {
-  if((module=='Vendor Payments' && field=='Payment Date') || ((module=='Expenses' || module=='Returns & RTO' || module=='Bank Received' || module=='Vendor Payment Transactions') && field=='Date')){
+  if((module=='Vendor Payments' && field=='Payment Date') || ((module=='Expenses' || module=='Returns & RTO' || module=='Bank Received' || module=='Vendor Payment Transactions' || module=='Opening Balances') && field=='Date')){
    DateTime? selectedDate;
    try{selectedDate=DateTime.tryParse(controller.text);}catch(_){}
    return Padding(padding:const EdgeInsets.only(bottom:12),child:InkWell(
