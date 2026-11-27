@@ -918,12 +918,15 @@ class _BusinessHomeState extends State<BusinessHome> {
  }
  Future<void> _exportExcel(String module)async{
   try{
-   final data=rows(module),cols=fields[module]??[];final book=Excel.createExcel();final sheet=book['Export'];
+   final data=_periodRows(module),cols=fields[module]??[];final book=Excel.createExcel();final sheet=book['DIGITECHIFIED'];
+   sheet.appendRow([TextCellValue('DIGITECHIFIED BUSINESS MANAGER')]);
+   sheet.appendRow([TextCellValue('$module • $_periodLabel')]);
    sheet.appendRow(cols.map((e)=>TextCellValue(e)).toList());
    for(final row in data){sheet.appendRow(cols.map((e)=>TextCellValue('${row[e]??''}')).toList());}
    final bytes=book.encode();if(bytes==null)return;
-   await FilePicker.platform.saveFile(fileName:'${module.replaceAll(' ','_')}.xlsx',bytes:Uint8List.fromList(bytes));
-   if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Excel export ready')));
+   await FilePicker.platform.saveFile(fileName:'DIGITECHIFIED_${module.replaceAll(' ','_')}_${selectedFyStart}_${selectedMonth.toString().padLeft(2,'0')}.xlsx',bytes:Uint8List.fromList(bytes));
+   if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('DIGITECHIFIED Excel export ready')));
   }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Export failed: $e')));}
  }
+
 }
