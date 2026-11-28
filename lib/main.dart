@@ -617,7 +617,7 @@ class _BusinessHomeState extends State<BusinessHome> {
       const Text('Please wait while your data is syncing',style:TextStyle(fontSize:12,color:Colors.black54)),
      ]),
     )))),
-   )),
+   ),
   ]));
  }
  Widget _sideNav()=>Container(width:235,color:const Color(0xFF080808),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
