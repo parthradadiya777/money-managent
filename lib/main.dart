@@ -9,6 +9,7 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'dart:typed_data';
 import 'cloud_sync.dart';
+import 'financial_calculations.dart';
 import 'myntra_label_parser.dart';
 import 'meesho_label_parser.dart';
 
@@ -16,6 +17,7 @@ Uint8List? brandLogoBytes;
 
 const bool isTestEnvironment = String.fromEnvironment('APP_ENV') == 'test';
 const String hiveBoxName = isTestEnvironment ? 'business_manager_test' : 'business_manager';
+String activeHiveBoxName = hiveBoxName;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -46,14 +48,15 @@ class BusinessManagerApp extends StatelessWidget {
 }
 
 const platforms = ['Meesho', 'Myntra', 'Flipkart', 'Amazon', 'AJIO'];
-const modules = ['Dashboard','Daily Orders','Returns & RTO','Vendor Payments','Bank Received','Expenses','Financial Reports','Vendor Payment Transactions'];
+const modules = ['Dashboard','Daily Orders','Returns & RTO','Vendor Payments','Bank Received','Expenses','Financial Reports','Vendor Payment Transactions','Opening Balances'];
 const Map<String,List<String>> fields = {
  'Daily Orders':['Date','Platform','Firm / Account','Order ID','SKU / Product','Brand','Size','Color','Orders Qty','Gross Order Value','Delivered Qty','Delivered Sales','Commission / Fees','Shipping Fees','Other Deductions','Courier','AWB / Tracking No.','Customer','Pincode','Source PDF','PDF Page'],
  'Returns & RTO':['Date','Platform','RTO / Return','Details'],
  'Vendor Payments':['Month','Firm Name','Vendor Name','Opening Balance','New Amount','Closing Balance','Amount Paid','Payment Date','Payment Mode','Notes'],
- 'Bank Received':['Date','Platform','Amount','Details','Brand'],
- 'Expenses':['Date','Expense','Details','Payment Mode'],
- 'Vendor Payment Transactions':['Date','Firm Name','Vendor Name','Amount','Payment Mode','Notes'],
+ 'Bank Received':['Date','Platform','Account Name','Amount','Details','Brand'],
+ 'Expenses':['Date','Payment Account','Expense','Details','Payment Mode'],
+ 'Vendor Payment Transactions':['Date','Firm Name','Vendor Name','Payment Account','Amount','Payment Mode','Notes'],
+ 'Opening Balances':['Date','Account Type','Account Name','Opening Balance','Notes'],
 };
 
 
@@ -76,118 +79,382 @@ class AuthGate extends StatefulWidget {
   @override
   State<AuthGate> createState() => _AuthGateState();
 }
-
 class _AuthGateState extends State<AuthGate> {
-  final Box box = Hive.box(hiveBoxName);
+  final Box authBox = Hive.box(hiveBoxName);
+  bool loading = true;
+  String? role;
+  String? error;
+  @override
+  void initState() { super.initState(); _restoreSession(); }
+  Future<void> _restoreSession() async {
+    final token = authBox.get('cloudToken') as String?;
+    if (!CloudSyncService.configured) {
+      activeHiveBoxName = hiveBoxName;
+      if (mounted) setState(() { loading = false; role = 'local'; });
+      return;
+    }
+    if (token == null || token.isEmpty) {
+      activeHiveBoxName = hiveBoxName;
+      if (mounted) setState(() { loading = false; role = null; });
+      return;
+    }
+    try {
+      if (authBox.get('cloudImpersonating') == true) {
+        final tenantId = '${authBox.get('cloudTenantId') ?? ''}';
+        if (tenantId.isEmpty) throw Exception('Partner session is missing its workspace.');
+        await _openPartnerBox(tenantId, token);
+        if (mounted) setState(() { loading = false; role = 'impersonating'; error = null; });
+        return;
+      }
+      final me = await CloudSyncService(token: token).fetchMe();
+      final accountRole = '${me['role'] ?? 'partner'}';
+      if (accountRole == 'super_admin') {
+        activeHiveBoxName = hiveBoxName;
+      } else {
+        await _openPartnerBox('${me['tenant_id']}', token);
+      }
+      if (mounted) setState(() { loading = false; role = accountRole; error = null; });
+    } catch (e) {
+      if (mounted) setState(() { loading = false; error = e.toString().replaceFirst('Exception: ', ''); });
+    }
+  }
+  Future<void> _openPartnerBox(String tenantId, String token) async {
+    activeHiveBoxName = '${hiveBoxName}_$tenantId';
+    final partnerBox = await Hive.openBox(activeHiveBoxName);
+    await partnerBox.put('cloudToken', token);
+    await partnerBox.put('cloudTenantId', tenantId);
+    if (!partnerBox.containsKey('Masters')) {
+      await partnerBox.put('Masters', [
+        {'Record Type':'Platform','Name':'Meesho'},
+        {'Record Type':'Platform','Name':'Myntra'},
+        {'Record Type':'Platform','Name':'Flipkart'},
+        {'Record Type':'Platform','Name':'Amazon'},
+        {'Record Type':'Platform','Name':'AJIO'},
+      ]);
+    }
+  }
+  Future<void> _onAuthenticated(String token, String accountRole) async {
+    await authBox.put('cloudToken', token);
+    await authBox.put('cloudRole', accountRole);
+    await authBox.delete('cloudImpersonating');
+    if (accountRole == 'super_admin') {
+      activeHiveBoxName = hiveBoxName;
+    } else {
+      final me = await CloudSyncService(token: token).fetchMe();
+      await _openPartnerBox('${me['tenant_id']}', token);
+    }
+    if (mounted) setState(() { role = accountRole; loading = false; error = null; });
+  }
   @override
   Widget build(BuildContext context) {
     if (!CloudSyncService.configured) return const BusinessHome();
-    final token = box.get('cloudToken') as String?;
-    if (token == null || token.isEmpty) {
-      return LoginPage(onAuthenticated: (value) async {
-        await box.put('cloudToken', value);
-        if (mounted) setState(() {});
-      });
-    }
+    if (loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (error != null) return Scaffold(body: Center(child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const BrandMark(size: 54), const SizedBox(height: 16),
+        Text(error!, textAlign: TextAlign.center), const SizedBox(height: 12),
+        FilledButton(onPressed: () { setState(() { loading = true; error = null; }); _restoreSession(); }, child: const Text('Retry')),
+        TextButton(onPressed: () async {
+          await authBox.delete('cloudToken');
+          await authBox.delete('cloudAdminToken');
+          await authBox.delete('cloudImpersonating');
+          if (mounted) setState(() { role = null; error = null; });
+        }, child: const Text('Sign in again')),
+      ]),
+    )));
+    if (role == null) return LoginPage(onAuthenticated: _onAuthenticated);
+    if (role == 'super_admin') return const AdminHome();
     return const BusinessHome();
   }
 }
 
 class LoginPage extends StatefulWidget {
-  final Future<void> Function(String token) onAuthenticated;
+  final Future<void> Function(String token, String role) onAuthenticated;
   const LoginPage({super.key, required this.onAuthenticated});
   @override
   State<LoginPage> createState() => _LoginPageState();
 }
-
 class _LoginPageState extends State<LoginPage> {
   final email = TextEditingController();
   final password = TextEditingController();
-  final business = TextEditingController();
-  bool register = false;
   bool busy = false;
   bool obscure = true;
   String? error;
-
   Future<void> submit() async {
-    if (email.text.trim().isEmpty || password.text.isEmpty ||
-        (register && business.text.trim().isEmpty)) {
-      setState(() => error = 'Please fill all required fields.');
+    if (email.text.trim().isEmpty || password.text.isEmpty) {
+      setState(() => error = 'Please enter your Login ID and password.');
       return;
     }
     setState(() { busy = true; error = null; });
     try {
       final result = await CloudSyncService().authenticate(
-        email: email.text.trim(),
-        password: password.text,
-        businessName: business.text.trim(),
-        register: register,
+        email: email.text.trim(), password: password.text, register: false,
       );
-      await widget.onAuthenticated(result['access_token'] as String);
+      await widget.onAuthenticated(result['access_token'] as String, '${result['role'] ?? 'partner'}');
     } catch (e) {
       setState(() => error = e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => busy = false);
     }
   }
-
   @override
-  void dispose() {
-    email.dispose(); password.dispose(); business.dispose();
-    super.dispose();
-  }
-
+  void dispose() { email.dispose(); password.dispose(); super.dispose(); }
   @override
   Widget build(BuildContext context) => Scaffold(
     body: Center(child: SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 440),
-        child: Card(
-          color: Colors.white,
-          elevation: 1,
-          child: Padding(
-            padding: const EdgeInsets.all(28),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              const BrandMark(size: 62),
-              const SizedBox(height: 14),
-              const Text('DIGITECHIFIED', textAlign: TextAlign.center,
-                style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.4)),
-              const SizedBox(height: 4),
-              const Text('Business Manager', textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 24),
-              if (register) ...[
-                TextField(controller: business, decoration: const InputDecoration(labelText: 'Business / Firm Name')),
-                const SizedBox(height: 12),
-              ],
-              TextField(controller: email, keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(labelText: 'Email')),
-              const SizedBox(height: 12),
-              TextField(controller: password, obscureText: obscure,
-                decoration: InputDecoration(labelText: 'Password',
-                  helperText: register ? 'Use at least 12 characters' : null,
-                  suffixIcon: IconButton(icon: Icon(obscure ? Icons.visibility : Icons.visibility_off),
-                    onPressed: () => setState(() => obscure = !obscure)))),
-              if (error != null) ...[
-                const SizedBox(height: 12),
-                Text(error!, style: const TextStyle(color: Colors.red)),
-              ],
-              const SizedBox(height: 18),
-              FilledButton(
-                onPressed: busy ? null : submit,
-                child: Padding(padding: const EdgeInsets.all(12),
-                  child: Text(busy ? 'Please wait...' : register ? 'Create Business Account' : 'Login')),
-              ),
-              TextButton(
-                onPressed: busy ? null : () => setState(() { register = !register; error = null; }),
-                child: Text(register ? 'Already registered? Login' : 'New business? Create account'),
-              ),
-            ]),
-          ),
-        ),
+        child: Card(color: Colors.white, elevation: 1, child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            const BrandMark(size: 62), const SizedBox(height: 14),
+            const Text('DIGITECHIFIED', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.4)),
+            const SizedBox(height: 4),
+            const Text('Business Manager', textAlign: TextAlign.center, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 24),
+            TextField(controller: email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Login ID')),
+            const SizedBox(height: 12),
+            TextField(controller: password, obscureText: obscure, decoration: InputDecoration(labelText: 'Password',
+              suffixIcon: IconButton(icon: Icon(obscure ? Icons.visibility : Icons.visibility_off), onPressed: () => setState(() => obscure = !obscure)))),
+            if (error != null) ...[const SizedBox(height: 12), Text(error!, style: const TextStyle(color: Colors.red))],
+            const SizedBox(height: 18),
+            FilledButton(onPressed: busy ? null : submit, child: Padding(padding: const EdgeInsets.all(12), child: Text(busy ? 'Please wait...' : 'Secure Login'))),
+            const SizedBox(height: 8),
+            const Text('Partner accounts are created by Digitechified Admin.', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: Colors.black54)),
+          ]),
+        )),
       ),
     )),
+  );
+}
+
+class AdminHome extends StatefulWidget {
+  const AdminHome({super.key});
+  @override
+  State<AdminHome> createState() => _AdminHomeState();
+}
+
+class _AdminHomeState extends State<AdminHome> {
+  final Box authBox = Hive.box(hiveBoxName);
+  List<Map<String, dynamic>> partners = [];
+  bool loading = true;
+  String? error;
+  CloudSyncService get api => CloudSyncService(token: authBox.get('cloudToken') as String?);
+
+  @override
+  void initState() { super.initState(); _refresh(); }
+
+  Future<void> _refresh() async {
+    setState(() { loading = true; error = null; });
+    try { partners = await api.listPartners(); }
+    catch (e) { error = e.toString().replaceFirst('Exception: ', ''); }
+    finally { if (mounted) setState(() => loading = false); }
+  }
+
+  Future<void> _createPartner() async {
+    final name = TextEditingController();
+    final login = TextEditingController();
+    final password = TextEditingController();
+    final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+      title: const Text('Create Partner Account'),
+      content: SizedBox(width: 440, child: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextField(controller: name, decoration: const InputDecoration(labelText: 'Partner / Business Name')),
+        const SizedBox(height: 10),
+        TextField(controller: login, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Login ID (email)')),
+        const SizedBox(height: 10),
+        TextField(controller: password, obscureText: true, decoration: const InputDecoration(labelText: 'Initial Password (minimum 12 characters)')),
+      ])),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Create Partner')),
+      ],
+    ));
+    if (ok == true) {
+      try {
+        await api.createPartner(name: name.text.trim(), loginId: login.text.trim(), password: password.text);
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Partner account created.')));
+        await _refresh();
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+      }
+    }
+    name.dispose(); login.dispose(); password.dispose();
+  }
+
+  Future<void> _editPartner(Map<String, dynamic> p) async {
+    final name = TextEditingController(text: '${p['name'] ?? ''}');
+    final login = TextEditingController(text: '${p['login_id'] ?? ''}');
+    final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+      title: const Text('Edit Partner'),
+      content: SizedBox(width: 440, child: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextField(controller: name, decoration: const InputDecoration(labelText: 'Partner Name')),
+        const SizedBox(height: 10),
+        TextField(controller: login, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Login ID')),
+      ])),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save Changes')),
+      ],
+    ));
+    if (ok == true) {
+      try { await api.updatePartner('${p['tenant_id']}', {'name': name.text.trim(), 'login_id': login.text.trim()}); await _refresh(); }
+      catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')))); }
+    }
+    name.dispose(); login.dispose();
+  }
+
+  Future<void> _togglePartner(Map<String, dynamic> p) async {
+    final status = p['status'] == 'active' ? 'disabled' : 'active';
+    try { await api.updatePartner('${p['tenant_id']}', {'status': status}); await _refresh(); }
+    catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')))); }
+  }
+
+  Future<void> _resetPassword(Map<String, dynamic> p) async {
+    final password = TextEditingController();
+    final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+      title: Text('Reset password • ${p['name']}'),
+      content: TextField(controller: password, obscureText: true, decoration: const InputDecoration(labelText: 'New password (minimum 12 characters)')),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Reset Password')),
+      ],
+    ));
+    if (ok == true) {
+      try {
+        await api.resetPartnerPassword('${p['tenant_id']}', password.text);
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password updated.')));
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+      }
+    }
+    password.dispose();
+  }
+
+  Future<void> _openPartner(Map<String, dynamic> p) async {
+    try {
+      final result = await api.accessPartner('${p['tenant_id']}');
+      final token = result['access_token'] as String;
+      final tenantId = result['tenant_id'] as String;
+      await authBox.put('cloudAdminToken', authBox.get('cloudToken'));
+      await authBox.put('cloudToken', token);
+      await authBox.put('cloudImpersonating', true);
+      await authBox.put('cloudTenantId', tenantId);
+      await authBox.put('cloudAdminPartnerName', result['partner_name']);
+      await authBox.put('cloudRole', 'super_admin');
+      activeHiveBoxName = '${hiveBoxName}_$tenantId';
+      final partnerBox = await Hive.openBox(activeHiveBoxName);
+      await partnerBox.put('cloudToken', token);
+      await partnerBox.put('cloudTenantId', tenantId);
+      if (!partnerBox.containsKey('Masters')) {
+        await partnerBox.put('Masters', [
+          {'Record Type':'Platform','Name':'Meesho'},
+          {'Record Type':'Platform','Name':'Myntra'},
+          {'Record Type':'Platform','Name':'Flipkart'},
+          {'Record Type':'Platform','Name':'Amazon'},
+          {'Record Type':'Platform','Name':'AJIO'},
+        ]);
+      }
+      if (mounted) Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const BusinessHome()), (route) => false);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+    }
+  }
+
+  Future<void> _logout() async {
+    for (final key in ['cloudToken','cloudAdminToken','cloudImpersonating','cloudTenantId','cloudAdminPartnerName','cloudRole']) {
+      await authBox.delete(key);
+    }
+    activeHiveBoxName = hiveBoxName;
+    if (mounted) Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const BusinessManagerApp()), (route) => false);
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: const Color(0xFFF7F6F2),
+    appBar: AppBar(
+      backgroundColor: const Color(0xFF080808),
+      foregroundColor: Colors.white,
+      title: const Row(children: [BrandMark(size: 34), SizedBox(width: 12), Text('DIGITECHIFIED • SUPER ADMIN', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold))]),
+      actions: [
+        IconButton(tooltip: 'Refresh partners', onPressed: _refresh, icon: const Icon(Icons.refresh)),
+        IconButton(tooltip: 'Logout', onPressed: _logout, icon: const Icon(Icons.logout)),
+      ],
+    ),
+    body: Center(child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 1100),
+      child: Padding(padding: const EdgeInsets.all(22), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Partner Management', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF17233D))),
+            Text('Create and control independent partner workspaces', style: TextStyle(color: Colors.black54, fontSize: 12)),
+          ])),
+          FilledButton.icon(onPressed: _createPartner, icon: const Icon(Icons.add), label: const Text('Add Partner')),
+        ]),
+        const SizedBox(height: 18),
+        Row(children: [
+          Expanded(child: _metric('Total Partners', partners.length.toString(), Icons.groups_2)),
+          const SizedBox(width: 10),
+          Expanded(child: _metric('Active', partners.where((p) => p['status'] == 'active').length.toString(), Icons.verified_user)),
+          const SizedBox(width: 10),
+          Expanded(child: _metric('Disabled', partners.where((p) => p['status'] != 'active').length.toString(), Icons.block)),
+        ]),
+        const SizedBox(height: 18),
+        if (loading) const Expanded(child: Center(child: CircularProgressIndicator()))
+        else if (error != null) Expanded(child: Center(child: Text(error!, textAlign: TextAlign.center)))
+        else if (partners.isEmpty) const Expanded(child: Center(child: Text('No partners created yet. Add the first partner.')))
+        else Expanded(child: ListView.separated(
+          itemCount: partners.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 9),
+          itemBuilder: (ctx, i) {
+            final p = partners[i];
+            final active = p['status'] == 'active';
+            final title = '${p['name'] ?? 'Partner'}';
+            return Card(
+              color: Colors.white, elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: Color(0xFFE8E3D9))),
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                leading: CircleAvatar(backgroundColor: const Color(0xFFFFF4D8), child: Text(title.isNotEmpty ? title[0].toUpperCase() : 'P', style: const TextStyle(color: Color(0xFF9A7116), fontWeight: FontWeight.bold))),
+                title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text('${p['login_id']}  •  ${p['partner_code']}\n${active ? 'Active' : 'Disabled'}', style: const TextStyle(height: 1.5)),
+                isThreeLine: true,
+                trailing: Wrap(alignment: WrapAlignment.end, children: [
+                  if (active) IconButton(tooltip: 'Open partner workspace', onPressed: () => _openPartner(p), icon: const Icon(Icons.login, color: Color(0xFFB88919))),
+                  PopupMenuButton<String>(
+                    onSelected: (v) {
+                      if (v == 'edit') _editPartner(p);
+                      if (v == 'status') _togglePartner(p);
+                      if (v == 'password') _resetPassword(p);
+                    },
+                    itemBuilder: (_) => [
+                      const PopupMenuItem(value: 'edit', child: Text('Edit partner')),
+                      PopupMenuItem(value: 'status', child: Text(active ? 'Disable partner' : 'Activate partner')),
+                      const PopupMenuItem(value: 'password', child: Text('Reset password')),
+                    ],
+                  ),
+                ]),
+              ),
+            );
+          },
+        )),
+        const SizedBox(height: 8),
+        const Text('Partner staff accounts are disabled. Only Digitechified Admin can create and manage partner logins.', style: TextStyle(fontSize: 11, color: Colors.black54)),
+      ])),
+    )),
+  );
+
+  Widget _metric(String label, String value, IconData icon) => Container(
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(13), border: Border.all(color: const Color(0xFFE8E3D9))),
+    child: Row(children: [
+      Icon(icon, color: const Color(0xFFB88919)), const SizedBox(width: 10),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: const TextStyle(fontSize: 11, color: Colors.black54)),
+        Text(value, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.bold)),
+      ])),
+    ]),
   );
 }
 
@@ -196,7 +463,7 @@ class BusinessHome extends StatefulWidget {
  @override State<BusinessHome> createState()=>_BusinessHomeState();
 }
 class _BusinessHomeState extends State<BusinessHome> {
- final Box box=Hive.box(hiveBoxName);
+ final Box box=Hive.box(activeHiveBoxName);
  final TextEditingController _dailySearchController=TextEditingController();
  int _dailyPage=0;
  static const int _dailyPageSize=100;
@@ -272,6 +539,30 @@ class _BusinessHomeState extends State<BusinessHome> {
    if (mounted) setState(() => _syncMessage = 'Sync pending');
   }
  }
+ Future<void> _returnToAdmin() async {
+  final authBox = Hive.box(hiveBoxName);
+  final adminToken = authBox.get('cloudAdminToken') as String?;
+  if (adminToken == null || adminToken.isEmpty) return;
+  await authBox.put('cloudToken', adminToken);
+  await authBox.delete('cloudAdminToken');
+  await authBox.delete('cloudImpersonating');
+  await authBox.delete('cloudTenantId');
+  await authBox.delete('cloudAdminPartnerName');
+  await box.delete('cloudToken');
+  activeHiveBoxName = hiveBoxName;
+  if (mounted) Navigator.of(context).pushAndRemoveUntil(
+    MaterialPageRoute(builder: (_) => const AdminHome()), (route) => false);
+ }
+ Future<void> _logout() async {
+  final authBox = Hive.box(hiveBoxName);
+  for (final key in ['cloudToken','cloudAdminToken','cloudImpersonating','cloudTenantId','cloudAdminPartnerName','cloudRole']) {
+   await authBox.delete(key);
+  }
+  await box.delete('cloudToken');
+  activeHiveBoxName = hiveBoxName;
+  if (mounted) Navigator.of(context).pushAndRemoveUntil(
+    MaterialPageRoute(builder: (_) => const BusinessManagerApp()), (route) => false);
+ }
  @override Widget build(BuildContext context){
   final wide=MediaQuery.of(context).size.width>850;
   return Scaffold(body:Row(children:[
@@ -286,9 +577,10 @@ class _BusinessHomeState extends State<BusinessHome> {
    Text('Business Manager',style:TextStyle(color:Color(0xFFB9B9B9),fontSize:12)),
   ])),
   const Divider(color:Color(0xFF333333)),
-  Expanded(child:ListView.builder(itemCount:modules.length-1,itemBuilder:(c,index){
-   final i=index>=3?index+1:index;
-   final icons=[Icons.dashboard_rounded,Icons.shopping_bag,Icons.assignment_return,Icons.payments,Icons.account_balance,Icons.receipt_long,Icons.assessment,Icons.payment];
+  Expanded(child:ListView.builder(itemCount:8,itemBuilder:(c,index){
+   const visibleModules=[0,1,2,4,5,6,7,8];
+   final i=visibleModules[index];
+   final icons=[Icons.dashboard_rounded,Icons.shopping_bag,Icons.assignment_return,Icons.payments,Icons.account_balance,Icons.receipt_long,Icons.assessment,Icons.payment,Icons.account_balance_wallet];
    final active=selected==i;
    return ListTile(dense:true,selected:active,selectedTileColor:const Color(0xFF292313),leading:Icon(icons[i],color:active?const Color(0xFFFFC84D):const Color(0xFFB9B9B9),size:19),
     title:Text(_moduleTitle(modules[i]),style:TextStyle(color:active?Colors.white:const Color(0xFFB9C7E5),fontSize:13,fontWeight:active?FontWeight.w600:FontWeight.normal)),onTap:()=>setState(()=>selected=i));
@@ -299,15 +591,15 @@ class _BusinessHomeState extends State<BusinessHome> {
   if(MediaQuery.of(context).size.width<=850)const Icon(Icons.menu_rounded,color:Color(0xFF263B67)),
   const SizedBox(width:8),Expanded(child:Text(selected==0?'Business Overview':_moduleTitle(modules[selected]),style:const TextStyle(fontSize:19,fontWeight:FontWeight.bold,color:Color(0xFF17233D)))),
   Chip(avatar:Icon(Icons.circle,size:9,color:_syncMessage=='Cloud synced'?Colors.green:Colors.orange),
-   label:Text(_syncMessage ?? (box.get('cloudToken') != null ? 'Cloud sync' : 'Local data'))),
+   label:Text(Hive.box(hiveBoxName).get('cloudAdminPartnerName') != null
+    ? 'Admin Mode • ${Hive.box(hiveBoxName).get('cloudAdminPartnerName')}'
+    : (_syncMessage ?? (box.get('cloudToken') != null ? 'Cloud sync' : 'Local data')))),
   if (CloudSyncService.configured && box.get('cloudToken') != null)
    IconButton(tooltip:'Sync now', onPressed:_syncOnStart, icon:const Icon(Icons.sync)),
+  if (Hive.box(hiveBoxName).get('cloudAdminToken') != null)
+   IconButton(tooltip:'Return to Super Admin', onPressed:_returnToAdmin, icon:const Icon(Icons.admin_panel_settings,color:Color(0xFFB88919))),
   if (CloudSyncService.configured && box.get('cloudToken') != null)
-   IconButton(tooltip:'Logout', onPressed:() async {
-    await box.delete('cloudToken');
-    if (mounted) Navigator.of(context).pushAndRemoveUntil(
-     MaterialPageRoute(builder: (_) => const BusinessManagerApp()), (route) => false);
-   }, icon:const Icon(Icons.logout)),
+   IconButton(tooltip:'Logout', onPressed:_logout, icon:const Icon(Icons.logout)),
   const SizedBox(width:8),
   const CircleAvatar(backgroundColor:Color(0xFFE9EFFB),child:Text('P',style:TextStyle(color:Color(0xFFD6A52A),fontWeight:FontWeight.bold))),
  ]));
@@ -337,15 +629,7 @@ class _BusinessHomeState extends State<BusinessHome> {
 
   String _moduleTitle(String module)=>module=='Vendor Payment Transactions'?'Vendor Pending Payment':module;
   String _fyLabel(int y)=>'$y-${(y+1).toString().substring(2)}';
-  DateTime? _dateOf(Map r){
-   for(final key in ['Date','Payment Date','Month']){
-    final value='${r[key]??''}'.trim();
-    if(value.isEmpty||value.toLowerCase().contains('not detected'))continue;
-    final parsed=DateTime.tryParse(value.length==7?'$value-01':value);
-    if(parsed!=null)return parsed;
-   }
-   return null;
-  }
+  DateTime? _dateOf(Map r)=>parseAccountingDate(r);
   List<Map> _periodRows(String module)=>rows(module).where((r){final d=_dateOf(r);if(d==null)return selectedMonth==0;final fy=d.month>=4?d.year:d.year-1;return fy==selectedFyStart&&(selectedMonth==0||d.month==selectedMonth);}).toList();
   String get _periodLabel=>selectedMonth==0?'FY ${_fyLabel(selectedFyStart)}':'${['','January','February','March','April','May','June','July','August','September','October','November','December'][selectedMonth]} ${selectedFyStart+(selectedMonth>=4?0:1)}';
   Widget _periodFilterBar(){
@@ -368,11 +652,37 @@ class _BusinessHomeState extends State<BusinessHome> {
    ]));
   }
   num _total(List<Map> data,String field)=>data.fold<num>(0,(v,r)=>v+(num.tryParse('${r[field]??0}'.replaceAll(',',''))??0));
+  DateTime _periodStart()=>accountingPeriodStart(selectedFyStart,selectedMonth);
+  DateTime _periodEndExclusive(){final start=_periodStart();return selectedMonth==0?DateTime(start.year+1,4,1):DateTime(start.year,start.month+1,1);}
+  bool _beforePeriod(Map row){final d=_dateOf(row);return d!=null&&d.isBefore(_periodStart());}
+  num _cashOpeningBalance()=>calculateOpeningCashBalance(
+   openingBalances:rows('Opening Balances'),
+   bankReceipts:rows('Bank Received'),
+   vendorPayments:rows('Vendor Payment Transactions'),
+   expenses:rows('Expenses'),
+   periodStart:_periodStart(),
+  );
   num _returnQty(List<Map> data,String type)=>data.where((r)=>'${r['RTO / Return']??''}'.toLowerCase()==type.toLowerCase()).fold<num>(0,(v,r)=>v+(num.tryParse('${r['Details']??0}'.replaceAll(',',''))??0));
   Widget _financialReportsPage(){
    final o=_periodRows('Daily Orders'),ret=_periodRows('Returns & RTO'),v=_periodRows('Vendor Payments'),b=_periodRows('Bank Received'),e=_periodRows('Expenses'),p=_periodRows('Vendor Payment Transactions');
-   final sales=_total(o,'Delivered Sales'),fees=_total(o,'Commission / Fees')+_total(o,'Shipping Fees')+_total(o,'Other Deductions'),expenses=_total(e,'Expense'),bank=_total(b,'Amount'),paid=_total(p,'Amount'),purchase=_total(v,'New Amount');
+   final sales=_total(o,'Delivered Sales'),fees=_total(o,'Commission / Fees')+_total(o,'Shipping Fees')+_total(o,'Other Deductions'),expenses=_total(e,'Expense'),bank=_total(b,'Amount'),paid=_total(p,'Amount'),purchase=_total(v,'New Amount'),opening=_cashOpeningBalance();
    final returns=_returnQty(ret,'Return'),rto=_returnQty(ret,'RTO'),orders=_total(o,'Orders Qty'),delivered=(orders-returns-rto).clamp(0,double.infinity);
+   final accountLedgers=calculateAccountLedgers(
+    openingBalances:rows('Opening Balances'),
+    bankReceipts:rows('Bank Received'),
+    vendorPayments:rows('Vendor Payment Transactions'),
+    expenses:rows('Expenses'),
+    periodStart:_periodStart(),
+    periodEndExclusive:_periodEndExclusive(),
+   );
+   final accountRows=<Widget>[for(final ledger in accountLedgers)
+    Padding(padding:const EdgeInsets.symmetric(vertical:7),child:Column(children:[
+     Row(children:[Expanded(child:Text('${ledger['Account Name']}',style:const TextStyle(fontWeight:FontWeight.w700))),Text(money(ledger['Closing Balance'] as num),style:const TextStyle(fontWeight:FontWeight.bold))]),
+     const SizedBox(height:3),
+     Row(children:[Expanded(child:Text('Opening ${money(ledger['Opening Balance'] as num)}',style:const TextStyle(fontSize:10,color:Colors.black54))),Expanded(child:Text('+ In ${money(ledger['Receipts'] as num)}',style:const TextStyle(fontSize:10,color:Colors.black54))),Expanded(child:Text('- Out ${money((ledger['Vendor Payments'] as num)+(ledger['Expenses'] as num))}',style:const TextStyle(fontSize:10,color:Colors.black54)))]),
+    ])),
+   ];
+
    Widget line(String k,num n)=>Padding(padding:const EdgeInsets.symmetric(vertical:7),child:Row(children:[Expanded(child:Text(k,style:const TextStyle(fontSize:13))),Text(money(n),style:const TextStyle(fontWeight:FontWeight.w700,fontSize:13))]));
    Widget panel(String title,IconData icon,List<Widget> children)=>Card(elevation:0,color:Colors.white,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(16),side:const BorderSide(color:Color(0xFFE9E5DC))),child:Padding(padding:const EdgeInsets.all(18),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Row(children:[Icon(icon,color:const Color(0xFFB88919)),const SizedBox(width:9),Text(title,style:const TextStyle(fontSize:14,fontWeight:FontWeight.bold,letterSpacing:.3))]),const Divider(height:24),...children])));
    final marketplace=<Widget>[];
@@ -391,13 +701,16 @@ class _BusinessHomeState extends State<BusinessHome> {
     const SizedBox(height:14),
     panel('PROFIT & LOSS SUMMARY',Icons.account_balance_wallet,[line('Delivered Sales Revenue',sales),line('Marketplace Fees & Deductions',fees),line('Operating Expenses',expenses),const Divider(height:18),line('Operating Result before inventory cost',sales-fees-expenses),line('Vendor Purchases (shown separately)',purchase),const Text('Inventory opening/closing value is not yet recorded. Vendor purchases are shown separately and not treated as Cost of Goods Sold to avoid overstating profit.',style:TextStyle(color:Colors.deepOrange,fontSize:11,height:1.4))]),
     const SizedBox(height:14),
-    panel('CASH FLOW & VENDOR PAYMENTS',Icons.payments,[line('Bank Receipts Recorded',bank),line('Vendor Payments Made',paid),line('Operating Expenses',expenses),const Divider(height:18),line('Net Tracked Cash Movement',bank-paid-expenses),Text('${p.length} vendor payment transactions • ${b.length} bank receipts • ${e.length} expense records',style:const TextStyle(fontSize:11,color:Colors.black54))]),
+    panel('CASH FLOW & VENDOR PAYMENTS',Icons.payments,[line('Opening Cash / Bank Balance',opening),line('Bank Receipts Recorded',bank),line('Vendor Payments Made',paid),line('Operating Expenses',expenses),const Divider(height:18),line('Net Tracked Cash Movement',bank-paid-expenses),line('Estimated Closing Cash / Bank',opening+bank-paid-expenses),Text('Opening balance includes prior recorded movements before this period. ${p.length} vendor payment transactions • ${b.length} bank receipts • ${e.length} expense records',style:const TextStyle(fontSize:11,color:Colors.black54))]),
     const SizedBox(height:14),
-    panel('BALANCE SHEET CHECKLIST',Icons.account_balance,[const Text('To produce a complete balance sheet, enter opening bank/cash, inventory value, receivables, loans and owner capital. The app will not invent missing balances.',style:TextStyle(fontSize:12,color:Colors.black54,height:1.5))])
+    panel('ACCOUNT-WISE CASH / BANK RECONCILIATION',Icons.account_balance,accountRows.isEmpty?[const Text('Add Opening Balances and select Account Name on every receipt/payment/expense to see separate ledgers.',style:TextStyle(fontSize:12,color:Colors.black54))]:accountRows),
+
+    const SizedBox(height:14),
+    panel('BALANCE SHEET CHECKLIST',Icons.account_balance,[line('Opening Cash / Bank entered',opening),const Text('Opening balances are entered separately by Cash or Bank account. Inventory, receivables, loans and owner capital still need their own records before a complete balance sheet can be prepared.',style:TextStyle(fontSize:12,color:Colors.black54,height:1.5))])
    ]);
   }
   Widget _reportMetric(String title,num value)=>Container(width:175,padding:const EdgeInsets.all(13),decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(12)),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(title,style:const TextStyle(fontSize:11,color:Colors.black54)),Text(value.toStringAsFixed(0),style:const TextStyle(fontSize:20,fontWeight:FontWeight.bold))]));
-  List<String> _reportLines(){final o=_periodRows('Daily Orders'),e=_periodRows('Expenses'),b=_periodRows('Bank Received'),p=_periodRows('Vendor Payment Transactions'),v=_periodRows('Vendor Payments');final sales=_total(o,'Delivered Sales'),fees=_total(o,'Commission / Fees')+_total(o,'Shipping Fees')+_total(o,'Other Deductions'),expense=_total(e,'Expense');final ret=_periodRows('Returns & RTO');final total=_total(o,'Orders Qty'),returns=_returnQty(ret,'Return'),rto=_returnQty(ret,'RTO');final lines=<String>['DIGITECHIFIED BUSINESS MANAGER','FINANCIAL REPORT • $_periodLabel','','PROFIT & LOSS','Delivered Sales: ${money(sales)}','Marketplace Fees & Deductions: ${money(fees)}','Operating Expenses: ${money(expense)}','Operating Result before inventory cost: ${money(sales-fees-expense)}','Vendor Purchases: ${money(_total(v,'New Amount'))}','','MARKETPLACE DELIVERY SUMMARY','Platform | Orders | Delivered | Return | RTO'];for(final platform in platforms){final qty=o.where((r)=>'${r['Platform']??''}'.toLowerCase()==platform.toLowerCase()).fold<num>(0,(x,r)=>x+(num.tryParse('${r['Orders Qty']??0}')??0));final pr=_returnQty(ret.where((r)=>'${r['Platform']??''}'.toLowerCase()==platform.toLowerCase()).toList(),'Return');final rt=_returnQty(ret.where((r)=>'${r['Platform']??''}'.toLowerCase()==platform.toLowerCase()).toList(),'RTO');lines.add('$platform | $qty | ${(qty-pr-rt).clamp(0,double.infinity)} | $pr | $rt');}lines.addAll(['Total orders: $total','Total delivered: ${(total-returns-rto).clamp(0,double.infinity)}','Total returns: $returns','Total RTO: $rto','','CASH MOVEMENT','Bank Receipts: ${money(_total(b,'Amount'))}','Vendor Payments: ${money(_total(p,'Amount'))}','Operating Expenses: ${money(expense)}','Net Tracked Cash Movement: ${money(_total(b,'Amount')-_total(p,'Amount')-expense)}','Prepared by DIGITECHIFIED']);return lines;}
+  List<String> _reportLines(){final o=_periodRows('Daily Orders'),e=_periodRows('Expenses'),b=_periodRows('Bank Received'),p=_periodRows('Vendor Payment Transactions'),v=_periodRows('Vendor Payments');final sales=_total(o,'Delivered Sales'),fees=_total(o,'Commission / Fees')+_total(o,'Shipping Fees')+_total(o,'Other Deductions'),expense=_total(e,'Expense');final ret=_periodRows('Returns & RTO');final total=_total(o,'Orders Qty'),returns=_returnQty(ret,'Return'),rto=_returnQty(ret,'RTO');final opening=_cashOpeningBalance();final closing=opening+_total(b,'Amount')-_total(p,'Amount')-expense;final accountLedgers=calculateAccountLedgers(openingBalances:rows('Opening Balances'),bankReceipts:rows('Bank Received'),vendorPayments:rows('Vendor Payment Transactions'),expenses:rows('Expenses'),periodStart:_periodStart(),periodEndExclusive:_periodEndExclusive());final lines=<String>['DIGITECHIFIED BUSINESS MANAGER','FINANCIAL REPORT • $_periodLabel','','PROFIT & LOSS','Delivered Sales: ${money(sales)}','Marketplace Fees & Deductions: ${money(fees)}','Operating Expenses: ${money(expense)}','Operating Result before inventory cost: ${money(sales-fees-expense)}','Vendor Purchases: ${money(_total(v,'New Amount'))}','','MARKETPLACE DELIVERY SUMMARY','Platform | Orders | Delivered | Return | RTO'];for(final platform in platforms){final qty=o.where((r)=>'${r['Platform']??''}'.toLowerCase()==platform.toLowerCase()).fold<num>(0,(x,r)=>x+(num.tryParse('${r['Orders Qty']??0}')??0));final pr=_returnQty(ret.where((r)=>'${r['Platform']??''}'.toLowerCase()==platform.toLowerCase()).toList(),'Return');final rt=_returnQty(ret.where((r)=>'${r['Platform']??''}'.toLowerCase()==platform.toLowerCase()).toList(),'RTO');lines.add('$platform | $qty | ${(qty-pr-rt).clamp(0,double.infinity)} | $pr | $rt');}lines.addAll(['Total orders: $total','Total delivered: ${(total-returns-rto).clamp(0,double.infinity)}','Total returns: $returns','Total RTO: $rto','','CASH MOVEMENT','Opening Cash / Bank: ${money(opening)}','Bank Receipts: ${money(_total(b,'Amount'))}','Vendor Payments: ${money(_total(p,'Amount'))}','Operating Expenses: ${money(expense)}','Net Tracked Cash Movement: ${money(_total(b,'Amount')-_total(p,'Amount')-expense)}','Estimated Closing Cash / Bank: ${money(closing)}','','ACCOUNT-WISE CASH / BANK RECONCILIATION','Account | Opening | Receipts | Vendor Payments | Expenses | Closing',...accountLedgers.map((a)=>'${a['Account Name']} | ${money(a['Opening Balance'] as num)} | ${money(a['Receipts'] as num)} | ${money(a['Vendor Payments'] as num)} | ${money(a['Expenses'] as num)} | ${money(a['Closing Balance'] as num)}'),'Prepared by DIGITECHIFIED']);return lines;}
   Future<void> _exportFinancialPdf() async {
     PdfDocument? doc;
     try {
@@ -430,6 +743,16 @@ class _BusinessHomeState extends State<BusinessHome> {
       final delivered = (orders - returns - rto).clamp(0, double.infinity);
       final pending = vendors.fold<num>(0, (v, r) =>
         v + (num.tryParse('${r['Closing Balance'] ?? r['Pending Amount'] ?? 0}'.toString().replaceAll(',', '')) ?? 0));
+      final openingCash = _cashOpeningBalance();
+      final closingCash = openingCash + bankTotal - paymentTotal - expenseTotal;
+      final accountLedgers = calculateAccountLedgers(
+        openingBalances: rows('Opening Balances'),
+        bankReceipts: rows('Bank Received'),
+        vendorPayments: rows('Vendor Payment Transactions'),
+        expenses: rows('Expenses'),
+        periodStart: _periodStart(),
+        periodEndExclusive: _periodEndExclusive(),
+      );
 
       late PdfPage page;
       late Size pageSize;
@@ -507,17 +830,57 @@ class _BusinessHomeState extends State<BusinessHome> {
       addPage(2);
       y = 100;
       y = section(y, 'CASH FLOW SUMMARY');
-      y = line(y, 'Bank receipts recorded', money(bankTotal));
-      y = line(y, 'Vendor payments made', money(paymentTotal));
-      y = line(y, 'Operating expenses recorded', money(expenseTotal));
+      y = line(y, 'Opening cash / bank balance (incl. prior movements)', money(openingCash));
+      y = line(y, 'Bank receipts recorded in period', money(bankTotal));
+      y = line(y, 'Vendor payments made in period', money(paymentTotal));
+      y = line(y, 'Operating expenses recorded in period', money(expenseTotal));
       y = line(y, 'Net tracked cash movement', money(bankTotal - paymentTotal - expenseTotal), bold: true);
+      y = line(y, 'Estimated closing cash / bank balance', money(closingCash), bold: true);
+      y += 12;
+      y = section(y, 'ACCOUNT-WISE CASH / BANK RECONCILIATION');
+      final ledgerHeaders = ['Account', 'Opening', 'Receipts', 'Payments', 'Expenses', 'Closing'];
+      final ledgerWidths = [0.25, 0.15, 0.15, 0.15, 0.15, 0.15];
+      final ledgerX = 30.0;
+      final ledgerWidth = pageSize.width - 60;
+      page.graphics.drawRectangle(brush: navy, bounds: Rect.fromLTWH(ledgerX, y, ledgerWidth, 22));
+      var lx = ledgerX;
+      for (var i = 0; i < ledgerHeaders.length; i++) {
+        page.graphics.drawString(ledgerHeaders[i], smallFont, brush: white,
+          bounds: Rect.fromLTWH(lx + 4, y + 5, ledgerWidth * ledgerWidths[i] - 7, 13));
+        lx += ledgerWidth * ledgerWidths[i];
+      }
       y += 22;
+      for (final ledger in accountLedgers.take(8)) {
+        final vals = [
+          '${ledger['Account Name']}',
+          money(ledger['Opening Balance'] as num),
+          money(ledger['Receipts'] as num),
+          money(ledger['Vendor Payments'] as num),
+          money(ledger['Expenses'] as num),
+          money(ledger['Closing Balance'] as num),
+        ];
+        lx = ledgerX;
+        for (var i = 0; i < vals.length; i++) {
+          page.graphics.drawString(vals[i], smallFont, brush: navy,
+            bounds: Rect.fromLTWH(lx + 4, y + 5, ledgerWidth * ledgerWidths[i] - 7, 13));
+          lx += ledgerWidth * ledgerWidths[i];
+        }
+        page.graphics.drawLine(PdfPen(PdfColor(225, 229, 235)), Offset(ledgerX, y + 21), Offset(ledgerX + ledgerWidth, y + 21));
+        y += 22;
+      }
+      if (accountLedgers.isEmpty) {
+        y = line(y, 'No account ledger data', 'Assign account names to records');
+      } else if (accountLedgers.length > 8) {
+        y = line(y, 'Additional accounts', '${accountLedgers.length - 8} (see Excel export)');
+      }
+      y += 12;
       y = section(y, 'BALANCE SHEET • RECORDED POSITION');
       y = line(y, 'Vendor payable / pending balances', money(pending));
       y = line(y, 'Vendor purchases recorded in period', money(purchases));
       y = line(y, 'Inventory opening / closing value', 'NOT RECORDED');
       y = line(y, 'Marketplace receivables / unsettled amount', 'NOT RECORDED');
-      y = line(y, 'Opening bank and cash balances', 'NOT RECORDED');
+      y = line(y, 'Opening cash / bank balance', money(openingCash));
+      y = line(y, 'Estimated closing cash / bank balance', money(closingCash));
       y = line(y, 'Loans and owner capital', 'NOT RECORDED');
       y += 16;
       page.graphics.drawRectangle(brush: PdfSolidBrush(PdfColor(245, 247, 250)),
@@ -1043,6 +1406,7 @@ class _BusinessHomeState extends State<BusinessHome> {
   for(final f in ['Date','Purchase Date','Payment Date','Settlement Date']){if(controllers.containsKey(f))controllers[f]!.text=DateTime.now().toIso8601String().substring(0,10);}
   if((module=='Vendor Payments'||module=='Vendor Payment Transactions')&&controllers.containsKey('Month')){final now=DateTime.now();controllers['Month']!.text='${now.year}-${now.month.toString().padLeft(2,'0')}';if(controllers.containsKey('Payment Date'))controllers['Payment Date']!.text=now.toIso8601String().substring(0,10);}
   if(controllers.containsKey('Platform'))controllers['Platform']!.text=module=='Returns & RTO'?'Meesho':'Myntra';
+  if(module=='Opening Balances' && controllers.containsKey('Account Type'))controllers['Account Type']!.text='Bank';
   if(controllers.containsKey('Brand'))controllers['Brand']!.text='JIPROSTORE';
   final ok=await showDialog<bool>(context:context,builder:(ctx)=>Dialog(
    backgroundColor:const Color(0xFFF9F7F1),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(24)),
@@ -1105,13 +1469,18 @@ class _BusinessHomeState extends State<BusinessHome> {
   if (normalized == 'type' || normalized == 'rto / return') return ['Return', 'RTO'];
   if (normalized == 'status') return ['Pending', 'Completed', 'On Hold', 'Cancelled'];
   if (normalized.contains('payment mode')) return ['Bank Transfer', 'UPI', 'Cash', 'Cheque', 'Credit', 'Other'];
+  if (normalized == 'payment account' || normalized == 'account name') {
+    final names=rows('Opening Balances').map((r)=>'${r['Account Name']??''}'.trim()).where((v)=>v.isNotEmpty).toSet().toList();
+    return names..sort();
+  }
   if (normalized == 'record type') return ['Firm', 'Platform', 'Vendor', 'Bank Account', 'Expense Category'];
+  if (normalized == 'account type') return ['Cash', 'Bank'];
   if (normalized == 'state') return ['Gujarat', 'Maharashtra', 'Rajasthan', 'Delhi', 'Karnataka', 'Other'];
   if (normalized == 'gst %') return ['0', '5', '12', '18', '28'];
   return const [];
  }
  Widget _formField(String module, String field, TextEditingController controller) {
-  if((module=='Vendor Payments' && field=='Payment Date') || ((module=='Expenses' || module=='Returns & RTO' || module=='Bank Received' || module=='Vendor Payment Transactions') && field=='Date')){
+  if((module=='Vendor Payments' && field=='Payment Date') || ((module=='Expenses' || module=='Returns & RTO' || module=='Bank Received' || module=='Vendor Payment Transactions' || module=='Opening Balances') && field=='Date')){
    DateTime? selectedDate;
    try{selectedDate=DateTime.tryParse(controller.text);}catch(_){}
    return Padding(padding:const EdgeInsets.only(bottom:12),child:InkWell(

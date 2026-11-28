@@ -15,9 +15,16 @@ def verify_password(password: str, password_hash: str) -> bool:
     return _password_hash.verify(password, password_hash)
 
 
-def create_access_token(user_id: str, tenant_id: str) -> str:
-    expires = datetime.now(timezone.utc) + timedelta(minutes=settings.jwt_expire_minutes)
-    return jwt.encode({"sub": user_id, "tid": tenant_id, "exp": expires}, settings.jwt_secret, algorithm=_ALGORITHM)
+def create_access_token(user_id: str, tenant_id: str, *, expires_minutes: int | None = None, impersonating: bool = False) -> str:
+    duration = expires_minutes if expires_minutes is not None else settings.jwt_expire_minutes
+    now = datetime.now(timezone.utc)
+    expires = now + timedelta(minutes=duration)
+    # Keep sub-second precision so a password reset invalidates older tokens
+    # without also invalidating a new login created in the same second.
+    claims = {"sub": user_id, "tid": tenant_id, "iat": now.timestamp(), "exp": expires}
+    if impersonating:
+        claims["imp"] = True
+    return jwt.encode(claims, settings.jwt_secret, algorithm=_ALGORITHM)
 
 
 def decode_access_token(token: str):

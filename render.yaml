@@ -25,3 +25,5 @@ services:
         generateValue: true
       - key: CORS_ORIGINS
         value: "*"
+      - key: APP_ENV
+        value: "test"
