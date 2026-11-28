@@ -424,7 +424,8 @@ def send_partner_backup_test(db, partner, tenant, user):
             "for the named partner. No passwords, hashes, tokens, or other partners' data.\\n",
         )
     attachment = buffer.getvalue()
-    if len(attachment) > MAX_ATTACHMENT_BYTES:
+    pdf_attachment = _build_summary_pdf(export)
+    if len(attachment) + len(pdf_attachment) > MAX_ATTACHMENT_BYTES:
         raise ValueError("Partner backup is larger than the 20 MB email attachment limit")
 
     message = EmailMessage()
@@ -440,6 +441,10 @@ def send_partner_backup_test(db, partner, tenant, user):
     message.add_attachment(
         attachment, maintype="application", subtype="zip",
         filename=f"Digitechified_TEST_Backup_{now.strftime('%Y-%m')}.zip",
+    )
+    message.add_attachment(
+        pdf_attachment, maintype="application", subtype="pdf",
+        filename=f"Digitechified_TEST_Backup_Summary_{now.strftime('%Y-%m')}.pdf",
     )
     with smtplib.SMTP("smtp.gmail.com", 587, timeout=30) as smtp:
         smtp.ehlo()
