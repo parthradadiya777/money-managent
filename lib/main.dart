@@ -311,33 +311,6 @@ class _AdminHomeState extends State<AdminHome> {
     catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')))); }
   }
 
-  Future<void> _sendBackupTest(Map<String, dynamic> p) async {
-    final partnerName = '${p['name'] ?? 'Partner'}';
-    final recipient = '${p['login_id'] ?? ''}';
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Send Test Backup Email?'),
-        content: Text('A test backup ZIP containing only $partnerName workspace data will be sent to $recipient. The monthly backup schedule will not be affected.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton.icon(onPressed: () => Navigator.pop(ctx, true), icon: const Icon(Icons.email_outlined), label: const Text('Send Test')),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    try {
-      final result = await api.sendPartnerBackupTest('${p['tenant_id']}');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Test backup sent to ${result['recipient']} • ${result['records_count']} records'),
-      ));
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Test email failed: ${e.toString().replaceFirst('Exception: ', '')}')));
-    }
-  }
-
   Future<void> _resetPassword(Map<String, dynamic> p) async {
     final password = TextEditingController();
     final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
@@ -449,7 +422,6 @@ class _AdminHomeState extends State<AdminHome> {
                 isThreeLine: true,
                 trailing: Wrap(alignment: WrapAlignment.end, children: [
                   if (active) IconButton(tooltip: 'Open partner workspace', onPressed: () => _openPartner(p), icon: const Icon(Icons.login, color: Color(0xFFB88919))),
-                  if (active) IconButton(tooltip: 'Send test backup email', onPressed: () => _sendBackupTest(p), icon: const Icon(Icons.mark_email_unread_outlined, color: Color(0xFF287A55))),
                   PopupMenuButton<String>(
                     onSelected: (v) {
                       if (v == 'edit') _editPartner(p);
