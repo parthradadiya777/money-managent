@@ -77,3 +77,14 @@ class UserSecurity(Base):
     __tablename__ = "user_security"
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     tokens_valid_after: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, nullable=False)
+
+
+class PartnerBackupDelivery(Base):
+    """One successful monthly email backup per partner and calendar month."""
+    __tablename__ = "partner_backup_deliveries"
+    __table_args__ = (UniqueConstraint("tenant_id", "backup_month", name="uq_partner_backup_month"),)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
+    backup_month: Mapped[str] = mapped_column(String(7), nullable=False)
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, nullable=False)
+    records_count: Mapped[int] = mapped_column(default=0, nullable=False)
