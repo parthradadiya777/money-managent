@@ -186,6 +186,12 @@ def login(data: LoginIn, db: Session = Depends(get_db)):
         partner = _partner_for_tenant(db, user.tenant_id)
         if not partner or partner.status != "active":
             raise HTTPException(status_code=403, detail="Partner account is disabled or not provisioned. Contact Digitechified Admin.")
+    if user.role != "super_admin":
+        db.add(AuditLog(
+            tenant_id=user.tenant_id, user_id=user.id,
+            action="login", module="Authentication", record_id="partner-login",
+        ))
+        db.commit()
     return {
         "access_token": create_access_token(str(user.id), str(user.tenant_id)),
         "token_type": "bearer",
