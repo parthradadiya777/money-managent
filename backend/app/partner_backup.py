@@ -9,7 +9,6 @@ import json
 import logging
 import os
 import smtplib
-import zipfile
 from datetime import datetime
 from email.message import EmailMessage
 from zoneinfo import ZoneInfo
@@ -135,6 +134,7 @@ def _build_summary_pdf(export):
         table.setStyle(TableStyle([
             ("BACKGROUND",(0,0),(-1,0),colors.HexColor("#183153")),
             ("TEXTCOLOR",(0,0),(-1,0),colors.white),
+            ("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),
             ("BACKGROUND",(0,-1),(-1,-1),colors.HexColor("#F4F0E7")),
             ("GRID",(0,0),(-1,-1),0.4,colors.HexColor("#E1E5EA")),
             ("ALIGN",(1,1),(1,-1),"RIGHT"),("VALIGN",(0,0),(-1,-1),"MIDDLE"),
@@ -146,7 +146,7 @@ def _build_summary_pdf(export):
         Paragraph("PRIVACY &amp; SCOPE", styles["DBMSection"]),
         Paragraph(
             "This PDF contains summary counts only. Individual order entries and individual activity-log entries are not printed. "
-            "The attached ZIP remains the detailed partner data archive.",
+            "This PDF contains the partner backup summary and module-wise record counts.",
             styles["DBMNote"],
         ),
         Spacer(1, 16),
@@ -212,25 +212,9 @@ def _send_partner_backup(db, partner, tenant, user, backup_month, smtp):
         ],
     }
 
-    buffer = io.BytesIO()
-    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr(
-            f"partner_backup_{backup_month}.json",
-            json.dumps(export, ensure_ascii=False, default=_json_default, indent=2),
-        )
-        archive.writestr(
-            "README.txt",
-            "This archive contains only the business records and activity logs "
-            "for the partner named in partner_backup JSON. It does not contain "
-            "login passwords, password hashes, tokens, or other partners' data.\n",
-        )
-    attachment = buffer.getvalue()
     pdf_attachment = _build_summary_pdf(export)
-    if len(attachment) + len(pdf_attachment) > MAX_ATTACHMENT_BYTES:
-        logger.error(
-            "Partner backup too large for email; partner=%s month=%s bytes=%s",
-            tenant.id, backup_month, len(attachment),
-        )
+    if len(pdf_attachment) > MAX_ATTACHMENT_BYTES:
+        logger.error("Partner backup PDF too large for email; partner=%s month=%s", tenant.id, backup_month)
         return "too_large"
 
     sender = os.environ["BACKUP_SMTP_USERNAME"].strip()
@@ -243,12 +227,6 @@ def _send_partner_backup(db, partner, tenant, user, backup_month, smtp):
         f"Attached is your Digitechified Business Manager data backup for {backup_month}.\n"
         "This ZIP contains only your business workspace data. Please keep it in a safe place.\n\n"
         "Regards,\nDigitechified"
-    )
-    message.add_attachment(
-        attachment,
-        maintype="application",
-        subtype="zip",
-        filename=f"Digitechified_Backup_{backup_month}.zip",
     )
     message.add_attachment(
         pdf_attachment,
@@ -412,21 +390,9 @@ def send_partner_backup_test(db, partner, tenant, user):
             "created_at": row.created_at.isoformat() if row.created_at else None,
         } for row in audit_logs],
     }
-    buffer = io.BytesIO()
-    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr(
-            f"TEST_partner_backup_{now.strftime('%Y-%m')}.json",
-            json.dumps(export, ensure_ascii=False, default=_json_default, indent=2),
-        )
-        archive.writestr(
-            "README.txt",
-            "TEST BACKUP. Contains only the business records and activity logs "
-            "for the named partner. No passwords, hashes, tokens, or other partners' data.\\n",
-        )
-    attachment = buffer.getvalue()
     pdf_attachment = _build_summary_pdf(export)
-    if len(attachment) + len(pdf_attachment) > MAX_ATTACHMENT_BYTES:
-        raise ValueError("Partner backup is larger than the 20 MB email attachment limit")
+    if len(pdf_attachment) > MAX_ATTACHMENT_BYTES:
+        raise ValueError("Partner backup PDF is larger than the 20 MB email attachment limit")
 
     message = EmailMessage()
     message["Subject"] = f"[TEST] Your business data backup - {now.strftime('%Y-%m')}"
@@ -435,12 +401,8 @@ def send_partner_backup_test(db, partner, tenant, user):
     message.set_content(
         f"Hello {tenant.name},\\n\\n"
         "This is a TEST backup email from Digitechified Business Manager.\\n"
-        "The attached ZIP contains only this partner workspace's data.\\n\\n"
+        "Attached is the partner-specific PDF backup summary with record counts and module-wise details.\\n\\n"
         "Regards,\\nDigitechified"
-    )
-    message.add_attachment(
-        attachment, maintype="application", subtype="zip",
-        filename=f"Digitechified_TEST_Backup_{now.strftime('%Y-%m')}.zip",
     )
     message.add_attachment(
         pdf_attachment, maintype="application", subtype="pdf",
@@ -453,4 +415,4 @@ def send_partner_backup_test(db, partner, tenant, user):
         smtp.login(smtp_username, smtp_password)
         smtp.send_message(message)
     logger.info("Partner TEST backup email sent tenant=%s recipient=%s records=%s", tenant.id, user.email, len(records))
-    return {"recipient": user.email, "records_count": len(records), "attachment_bytes": len(attachment)}
+    return {"recipient": user.email, "records_count": len(records), "pdf_bytes": len(pdf_attachment)}
