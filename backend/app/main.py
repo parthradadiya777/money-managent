@@ -344,6 +344,37 @@ def access_partner(tenant_id: UUID, admin: Principal = Depends(require_admin), d
     return {"access_token": token, "token_type": "bearer", "tenant_id": str(tenant_id), "partner_name": tenant.name, "role": "super_admin", "expires_in": 1800}
 
 
+@app.get("/api/admin/partner-activity")
+def admin_partner_activity(
+    limit: int = 200,
+    tenant_id: UUID | None = None,
+    admin: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Return partner workspace audit events to Super Admin only."""
+    safe_limit = max(1, min(limit, 1000))
+    query = (
+        select(AuditLog, Tenant, User, Partner)
+        .join(Tenant, Tenant.id == AuditLog.tenant_id)
+        .outerjoin(User, User.id == AuditLog.user_id)
+        .outerjoin(Partner, Partner.tenant_id == AuditLog.tenant_id)
+        .where(Partner.tenant_id.is_not(None))
+    )
+    if tenant_id:
+        query = query.where(AuditLog.tenant_id == tenant_id)
+    rows = db.execute(query.order_by(AuditLog.created_at.desc()).limit(safe_limit)).all()
+    return {"activities": [{
+        "tenant_id": str(log.tenant_id),
+        "partner_name": tenant.name,
+        "partner_code": partner.code if partner else "",
+        "login_id": user.email if user else "",
+        "action": log.action,
+        "module": log.module,
+        "record_id": log.record_id,
+        "created_at": log.created_at.isoformat(),
+    } for log, tenant, user, partner in rows]}
+
+
 @app.get("/api/admin/audit-logs")
 def admin_audit_logs(limit: int = 100, admin: Principal = Depends(require_admin), db: Session = Depends(get_db)):
     safe_limit = max(1, min(limit, 500))
