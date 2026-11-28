@@ -7,6 +7,7 @@ DateTime? parseAccountingDate(Map row) {
         int.tryParse(value.substring(0, 4)) != null &&
         int.tryParse(value.substring(5, 7)) != null;
     final normalized = isYearMonth ? '$value-01' : value;
+    final parsed = DateTime.tryParse(normalized);
     if (parsed != null) return parsed;
   }
   return null;
