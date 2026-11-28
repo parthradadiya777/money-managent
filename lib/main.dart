@@ -325,7 +325,7 @@ class _AdminHomeState extends State<AdminHome> {
         const SizedBox(height: 10),
         TextField(controller: login, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Login ID (email)')),
         const SizedBox(height: 10),
-        TextField(controller: password, obscureText: true, decoration: const InputDecoration(labelText: 'Initial Password (minimum 12 characters)')),
+        TextField(controller: password, obscureText: true, decoration: const InputDecoration(labelText: 'Initial Password (minimum 8 characters)')),
       ])),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
@@ -376,7 +376,7 @@ class _AdminHomeState extends State<AdminHome> {
     final password = TextEditingController();
     final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
       title: Text('Reset password • ${p['name']}'),
-      content: TextField(controller: password, obscureText: true, decoration: const InputDecoration(labelText: 'New password (minimum 12 characters)')),
+      content: TextField(controller: password, obscureText: true, decoration: const InputDecoration(labelText: 'New password (minimum 8 characters)')),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
         FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Reset Password')),
