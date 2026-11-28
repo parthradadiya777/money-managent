@@ -163,10 +163,6 @@ def run_monthly_partner_backups():
                     result = _send_partner_backup(
                         db, partner, tenant, user, backup_month, smtp
                     )
-                    records_count = db.scalar(
-                        select(BusinessRecord).where(BusinessRecord.tenant_id == tenant.id)
-                        .with_only_columns(BusinessRecord.record_id)
-                    )
                     # Count all records for the admin summary without including their contents.
                     records_total = len(db.scalars(select(BusinessRecord.record_id).where(
                         BusinessRecord.tenant_id == tenant.id
