@@ -468,6 +468,7 @@ class _BusinessHomeState extends State<BusinessHome> {
  int _dailyPage=0;
  static const int _dailyPageSize=100;
  bool _pdfImporting=false;
+ bool _initialSyncLoading=true;
  int selected=0;
  int selectedFyStart=DateTime.now().month>=4?DateTime.now().year:DateTime.now().year-1;
  int selectedMonth=DateTime.now().month;
@@ -489,7 +490,10 @@ class _BusinessHomeState extends State<BusinessHome> {
  String _newSyncId() => '${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(0x7fffffff)}';
  Future<void> _syncOnStart() async {
   final token = box.get('cloudToken') as String?;
-  if (!CloudSyncService.configured || token == null || token.isEmpty) return;
+  if (!CloudSyncService.configured || token == null || token.isEmpty) {
+   if (mounted) setState(() => _initialSyncLoading = false);
+   return;
+  }
   final api = CloudSyncService(token: token);
   try {
    final remote = await api.fetchRecords();
@@ -522,6 +526,8 @@ class _BusinessHomeState extends State<BusinessHome> {
    if (mounted) setState(() => _syncMessage = 'Sync pending');
    if (mounted) ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(content: Text('Cloud sync issue: ${e.toString().replaceFirst('Exception: ', '')}')));
+  } finally {
+   if (mounted) setState(() => _initialSyncLoading = false);
   }
  }
  Future<void> _pushModule(String module, List<Map> list) async {
@@ -565,9 +571,25 @@ class _BusinessHomeState extends State<BusinessHome> {
  }
  @override Widget build(BuildContext context){
   final wide=MediaQuery.of(context).size.width>850;
-  return Scaffold(body:Row(children:[
-   if(wide)_sideNav(),
-   Expanded(child:Column(children:[_topBar(),_periodFilterBar(),Expanded(child:selected==0?_dashboard():selected==6?_financialReportsPage():_modulePage(modules[selected])),if(!wide)_bottomNav()])),
+  return Scaffold(body:Stack(children:[
+   Row(children:[
+    if(wide)_sideNav(),
+    Expanded(child:Column(children:[_topBar(),_periodFilterBar(),Expanded(child:selected==0?_dashboard():selected==6?_financialReportsPage():_modulePage(modules[selected])),if(!wide)_bottomNav()])),
+   ]),
+   if(_initialSyncLoading) Positioned.fill(child:Container(
+    color:const Color(0xFFF7F6F2).withOpacity(.94),
+    child:Center(child:Card(elevation:3,child:Padding(
+     padding:const EdgeInsets.symmetric(horizontal:30,vertical:26),
+     child:Column(mainAxisSize:MainAxisSize.min,children:[
+      const BrandMark(size:48),const SizedBox(height:20),
+      const SizedBox(width:34,height:34,child:CircularProgressIndicator(strokeWidth:3,color:Color(0xFFD6A52A))),
+      const SizedBox(height:16),
+      const Text('Loading Dashboard...',style:TextStyle(fontSize:16,fontWeight:FontWeight.w600)),
+      const SizedBox(height:5),
+      const Text('Please wait while your data is syncing',style:TextStyle(fontSize:12,color:Colors.black54)),
+     ]),
+    )))),
+   )),
   ]));
  }
  Widget _sideNav()=>Container(width:235,color:const Color(0xFF080808),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
