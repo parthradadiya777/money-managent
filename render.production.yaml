@@ -1,0 +1,29 @@
+databases:
+  - name: digitechified-bm-production-db
+    databaseName: digitechified_bm_production_db
+    user: digitechified_bm_production_db_user
+    plan: basic_256mb
+    region: singapore
+    postgresMajorVersion: 18
+
+services:
+  - type: web
+    name: digitechified-bm-production-api
+    runtime: python
+    plan: starter
+    region: singapore
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: digitechified-bm-production-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: APP_ENV
+        value: production
+      - key: CORS_ORIGINS
+        value: https://digitechified-business-manager-web.onrender.com
