@@ -710,7 +710,7 @@ class _BusinessHomeState extends State<BusinessHome> {
    ]);
   }
   Widget _reportMetric(String title,num value)=>Container(width:175,padding:const EdgeInsets.all(13),decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(12)),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(title,style:const TextStyle(fontSize:11,color:Colors.black54)),Text(value.toStringAsFixed(0),style:const TextStyle(fontSize:20,fontWeight:FontWeight.bold))]));
-  List<String> _reportLines(){final o=_periodRows('Daily Orders'),e=_periodRows('Expenses'),b=_periodRows('Bank Received'),p=_periodRows('Vendor Payment Transactions'),v=_periodRows('Vendor Payments');final sales=_total(o,'Delivered Sales'),fees=_total(o,'Commission / Fees')+_total(o,'Shipping Fees')+_total(o,'Other Deductions'),expense=_total(e,'Expense');final ret=_periodRows('Returns & RTO');final total=_total(o,'Orders Qty'),returns=_returnQty(ret,'Return'),rto=_returnQty(ret,'RTO');final opening=_cashOpeningBalance();final closing=opening+_total(b,'Amount')-_total(p,'Amount')-expense;final lines=<String>['DIGITECHIFIED BUSINESS MANAGER','FINANCIAL REPORT • $_periodLabel','','PROFIT & LOSS','Delivered Sales: ${money(sales)}','Marketplace Fees & Deductions: ${money(fees)}','Operating Expenses: ${money(expense)}','Operating Result before inventory cost: ${money(sales-fees-expense)}','Vendor Purchases: ${money(_total(v,'New Amount'))}','','MARKETPLACE DELIVERY SUMMARY','Platform | Orders | Delivered | Return | RTO'];for(final platform in platforms){final qty=o.where((r)=>'${r['Platform']??''}'.toLowerCase()==platform.toLowerCase()).fold<num>(0,(x,r)=>x+(num.tryParse('${r['Orders Qty']??0}')??0));final pr=_returnQty(ret.where((r)=>'${r['Platform']??''}'.toLowerCase()==platform.toLowerCase()).toList(),'Return');final rt=_returnQty(ret.where((r)=>'${r['Platform']??''}'.toLowerCase()==platform.toLowerCase()).toList(),'RTO');lines.add('$platform | $qty | ${(qty-pr-rt).clamp(0,double.infinity)} | $pr | $rt');}lines.addAll(['Total orders: $total','Total delivered: ${(total-returns-rto).clamp(0,double.infinity)}','Total returns: $returns','Total RTO: $rto','','CASH MOVEMENT','Opening Cash / Bank: ${money(opening)}','Bank Receipts: ${money(_total(b,'Amount'))}','Vendor Payments: ${money(_total(p,'Amount'))}','Operating Expenses: ${money(expense)}','Net Tracked Cash Movement: ${money(_total(b,'Amount')-_total(p,'Amount')-expense)}','Estimated Closing Cash / Bank: ${money(closing)}','Prepared by DIGITECHIFIED']);return lines;}
+  List<String> _reportLines(){final o=_periodRows('Daily Orders'),e=_periodRows('Expenses'),b=_periodRows('Bank Received'),p=_periodRows('Vendor Payment Transactions'),v=_periodRows('Vendor Payments');final sales=_total(o,'Delivered Sales'),fees=_total(o,'Commission / Fees')+_total(o,'Shipping Fees')+_total(o,'Other Deductions'),expense=_total(e,'Expense');final ret=_periodRows('Returns & RTO');final total=_total(o,'Orders Qty'),returns=_returnQty(ret,'Return'),rto=_returnQty(ret,'RTO');final opening=_cashOpeningBalance();final closing=opening+_total(b,'Amount')-_total(p,'Amount')-expense;final accountLedgers=calculateAccountLedgers(openingBalances:rows('Opening Balances'),bankReceipts:rows('Bank Received'),vendorPayments:rows('Vendor Payment Transactions'),expenses:rows('Expenses'),periodStart:_periodStart(),periodEndExclusive:_periodEndExclusive());final lines=<String>['DIGITECHIFIED BUSINESS MANAGER','FINANCIAL REPORT • $_periodLabel','','PROFIT & LOSS','Delivered Sales: ${money(sales)}','Marketplace Fees & Deductions: ${money(fees)}','Operating Expenses: ${money(expense)}','Operating Result before inventory cost: ${money(sales-fees-expense)}','Vendor Purchases: ${money(_total(v,'New Amount'))}','','MARKETPLACE DELIVERY SUMMARY','Platform | Orders | Delivered | Return | RTO'];for(final platform in platforms){final qty=o.where((r)=>'${r['Platform']??''}'.toLowerCase()==platform.toLowerCase()).fold<num>(0,(x,r)=>x+(num.tryParse('${r['Orders Qty']??0}')??0));final pr=_returnQty(ret.where((r)=>'${r['Platform']??''}'.toLowerCase()==platform.toLowerCase()).toList(),'Return');final rt=_returnQty(ret.where((r)=>'${r['Platform']??''}'.toLowerCase()==platform.toLowerCase()).toList(),'RTO');lines.add('$platform | $qty | ${(qty-pr-rt).clamp(0,double.infinity)} | $pr | $rt');}lines.addAll(['Total orders: $total','Total delivered: ${(total-returns-rto).clamp(0,double.infinity)}','Total returns: $returns','Total RTO: $rto','','CASH MOVEMENT','Opening Cash / Bank: ${money(opening)}','Bank Receipts: ${money(_total(b,'Amount'))}','Vendor Payments: ${money(_total(p,'Amount'))}','Operating Expenses: ${money(expense)}','Net Tracked Cash Movement: ${money(_total(b,'Amount')-_total(p,'Amount')-expense)}','Estimated Closing Cash / Bank: ${money(closing)}','','ACCOUNT-WISE CASH / BANK RECONCILIATION','Account | Opening | Receipts | Vendor Payments | Expenses | Closing',...accountLedgers.map((a)=>'${a['Account Name']} | ${money(a['Opening Balance'] as num)} | ${money(a['Receipts'] as num)} | ${money(a['Vendor Payments'] as num)} | ${money(a['Expenses'] as num)} | ${money(a['Closing Balance'] as num)}'),'Prepared by DIGITECHIFIED']);return lines;}
   Future<void> _exportFinancialPdf() async {
     PdfDocument? doc;
     try {
@@ -745,6 +745,14 @@ class _BusinessHomeState extends State<BusinessHome> {
         v + (num.tryParse('${r['Closing Balance'] ?? r['Pending Amount'] ?? 0}'.toString().replaceAll(',', '')) ?? 0));
       final openingCash = _cashOpeningBalance();
       final closingCash = openingCash + bankTotal - paymentTotal - expenseTotal;
+      final accountLedgers = calculateAccountLedgers(
+        openingBalances: rows('Opening Balances'),
+        bankReceipts: rows('Bank Received'),
+        vendorPayments: rows('Vendor Payment Transactions'),
+        expenses: rows('Expenses'),
+        periodStart: _periodStart(),
+        periodEndExclusive: _periodEndExclusive(),
+      );
 
       late PdfPage page;
       late Size pageSize;
@@ -828,7 +836,44 @@ class _BusinessHomeState extends State<BusinessHome> {
       y = line(y, 'Operating expenses recorded in period', money(expenseTotal));
       y = line(y, 'Net tracked cash movement', money(bankTotal - paymentTotal - expenseTotal), bold: true);
       y = line(y, 'Estimated closing cash / bank balance', money(closingCash), bold: true);
+      y += 12;
+      y = section(y, 'ACCOUNT-WISE CASH / BANK RECONCILIATION');
+      final ledgerHeaders = ['Account', 'Opening', 'Receipts', 'Payments', 'Expenses', 'Closing'];
+      final ledgerWidths = [0.25, 0.15, 0.15, 0.15, 0.15, 0.15];
+      final ledgerX = 30.0;
+      final ledgerWidth = pageSize.width - 60;
+      page.graphics.drawRectangle(brush: navy, bounds: Rect.fromLTWH(ledgerX, y, ledgerWidth, 22));
+      var lx = ledgerX;
+      for (var i = 0; i < ledgerHeaders.length; i++) {
+        page.graphics.drawString(ledgerHeaders[i], smallFont, brush: white,
+          bounds: Rect.fromLTWH(lx + 4, y + 5, ledgerWidth * ledgerWidths[i] - 7, 13));
+        lx += ledgerWidth * ledgerWidths[i];
+      }
       y += 22;
+      for (final ledger in accountLedgers.take(8)) {
+        final vals = [
+          '${ledger['Account Name']}',
+          money(ledger['Opening Balance'] as num),
+          money(ledger['Receipts'] as num),
+          money(ledger['Vendor Payments'] as num),
+          money(ledger['Expenses'] as num),
+          money(ledger['Closing Balance'] as num),
+        ];
+        lx = ledgerX;
+        for (var i = 0; i < vals.length; i++) {
+          page.graphics.drawString(vals[i], smallFont, brush: navy,
+            bounds: Rect.fromLTWH(lx + 4, y + 5, ledgerWidth * ledgerWidths[i] - 7, 13));
+          lx += ledgerWidth * ledgerWidths[i];
+        }
+        page.graphics.drawLine(PdfPen(PdfColor(225, 229, 235)), Offset(ledgerX, y + 21), Offset(ledgerX + ledgerWidth, y + 21));
+        y += 22;
+      }
+      if (accountLedgers.isEmpty) {
+        y = line(y, 'No account ledger data', 'Assign account names to records');
+      } else if (accountLedgers.length > 8) {
+        y = line(y, 'Additional accounts', '${accountLedgers.length - 8} (see Excel export)');
+      }
+      y += 12;
       y = section(y, 'BALANCE SHEET • RECORDED POSITION');
       y = line(y, 'Vendor payable / pending balances', money(pending));
       y = line(y, 'Vendor purchases recorded in period', money(purchases));
