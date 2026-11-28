@@ -7,7 +7,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from .config import settings
 from .database import Base, engine, get_db
-from .models import Tenant, User, Partner, BusinessRecord, AuditLog, AdminAccessLog, UserSecurity
+from .models import Tenant, User, Partner, BusinessRecord, AuditLog, AdminAccessLog, UserSecurity, PartnerBackupDelivery
+from .partner_backup import start_backup_scheduler, stop_backup_scheduler
 from .schemas import RegisterIn, LoginIn, PartnerCreateIn, PartnerUpdateIn, PasswordResetIn, PasswordChangeIn, RecordIn, RecordBatchIn
 from .security import hash_password, verify_password, create_access_token, decode_access_token
 
@@ -38,6 +39,16 @@ def _partner_for_tenant(db: Session, tenant_id: UUID):
 
 def _write_admin_log(db: Session, admin_id: UUID, tenant_id: UUID, action: str, details: str = ""):
     db.add(AdminAccessLog(admin_user_id=admin_id, tenant_id=tenant_id, action=action, details=details[:2000]))
+
+
+@app.on_event("startup")
+def start_monthly_backup_scheduler():
+    start_backup_scheduler()
+
+
+@app.on_event("shutdown")
+def stop_monthly_backup_scheduler():
+    stop_backup_scheduler()
 
 
 @app.on_event("startup")
