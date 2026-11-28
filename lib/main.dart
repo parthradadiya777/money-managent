@@ -318,20 +318,30 @@ class _AdminHomeState extends State<AdminHome> {
     final name = TextEditingController();
     final login = TextEditingController();
     final password = TextEditingController();
-    final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
-      title: const Text('Create Partner Account'),
-      content: SizedBox(width: 440, child: Column(mainAxisSize: MainAxisSize.min, children: [
-        TextField(controller: name, decoration: const InputDecoration(labelText: 'Partner / Business Name')),
-        const SizedBox(height: 10),
-        TextField(controller: login, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Login ID (email)')),
-        const SizedBox(height: 10),
-        TextField(controller: password, obscureText: true, decoration: const InputDecoration(labelText: 'Initial Password (minimum 8 characters)')),
-      ])),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Create Partner')),
-      ],
-    ));
+    final ok = await showDialog<bool>(context: context, builder: (ctx) {
+      bool showPassword = false;
+      return StatefulBuilder(builder: (ctx, setDialogState) => AlertDialog(
+        title: const Text('Create Partner Account'),
+        content: SizedBox(width: 440, child: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: name, decoration: const InputDecoration(labelText: 'Partner / Business Name')),
+          const SizedBox(height: 10),
+          TextField(controller: login, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Login ID (email)')),
+          const SizedBox(height: 10),
+          TextField(controller: password, obscureText: !showPassword, decoration: InputDecoration(
+            labelText: 'Initial Password (minimum 8 characters)',
+            suffixIcon: IconButton(
+              tooltip: showPassword ? 'Hide password' : 'Show password',
+              icon: Icon(showPassword ? Icons.visibility_off : Icons.visibility),
+              onPressed: () => setDialogState(() => showPassword = !showPassword),
+            ),
+          )),
+        ])),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Create Partner')),
+        ],
+      ));
+    });
     if (ok == true) {
       try {
         await api.createPartner(name: name.text.trim(), loginId: login.text.trim(), password: password.text);
@@ -374,14 +384,24 @@ class _AdminHomeState extends State<AdminHome> {
 
   Future<void> _resetPassword(Map<String, dynamic> p) async {
     final password = TextEditingController();
-    final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
-      title: Text('Reset password • ${p['name']}'),
-      content: TextField(controller: password, obscureText: true, decoration: const InputDecoration(labelText: 'New password (minimum 8 characters)')),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Reset Password')),
-      ],
-    ));
+    final ok = await showDialog<bool>(context: context, builder: (ctx) {
+      bool showPassword = false;
+      return StatefulBuilder(builder: (ctx, setDialogState) => AlertDialog(
+        title: Text('Reset password • ${p['name']}'),
+        content: TextField(controller: password, obscureText: !showPassword, decoration: InputDecoration(
+          labelText: 'New password (minimum 8 characters)',
+          suffixIcon: IconButton(
+            tooltip: showPassword ? 'Hide password' : 'Show password',
+            icon: Icon(showPassword ? Icons.visibility_off : Icons.visibility),
+            onPressed: () => setDialogState(() => showPassword = !showPassword),
+          ),
+        )),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Reset Password')),
+        ],
+      ));
+    });
     if (ok == true) {
       try {
         await api.resetPartnerPassword('${p['tenant_id']}', password.text);
