@@ -152,6 +152,7 @@ def run_monthly_partner_backups():
             logger.info("Monthly partner backup: no active partners found")
             return
 
+        summary_rows = []
         with smtplib.SMTP("smtp.gmail.com", 587, timeout=30) as smtp:
             smtp.ehlo()
             smtp.starttls()
@@ -162,16 +163,47 @@ def run_monthly_partner_backups():
                     result = _send_partner_backup(
                         db, partner, tenant, user, backup_month, smtp
                     )
+                    records_count = db.scalar(
+                        select(BusinessRecord).where(BusinessRecord.tenant_id == tenant.id)
+                        .with_only_columns(BusinessRecord.record_id)
+                    )
+                    # Count all records for the admin summary without including their contents.
+                    records_total = len(db.scalars(select(BusinessRecord.record_id).where(
+                        BusinessRecord.tenant_id == tenant.id
+                    )).all())
+                    summary_rows.append(
+                        f"- {tenant.name} | {user.email} | records: {records_total} | status: {result}"
+                    )
                     logger.info(
                         "Partner backup result=%s tenant=%s month=%s",
                         result, tenant.id, backup_month,
                     )
-                except Exception:
+                except Exception as exc:
                     db.rollback()
+                    summary_rows.append(
+                        f"- {tenant.name} | {user.email} | status: FAILED ({type(exc).__name__})"
+                    )
                     logger.exception(
                         "Partner backup failed tenant=%s month=%s",
                         tenant.id, backup_month,
                     )
+
+            admin_message = EmailMessage()
+            admin_message["Subject"] = f"Digitechified monthly backup summary - {backup_month}"
+            admin_message["From"] = smtp_username
+            admin_message["To"] = smtp_username
+            admin_message.set_content(
+                "Monthly partner backup summary\\n"
+                f"Month: {backup_month}\\n"
+                f"Active partners: {len(partners)}\\n"
+                f"Sent: {sum('status: sent' in row for row in summary_rows)}\\n"
+                f"Already sent: {sum('status: already_sent' in row for row in summary_rows)}\\n"
+                f"Failed/other: {sum(('status: FAILED' in row) or ('status: too_large' in row) for row in summary_rows)}\\n\\n"
+                "Per-partner status (metadata and counts only; no partner records attached):\\n"
+                + ("\\n".join(summary_rows) if summary_rows else "No partner details.")
+            )
+            smtp.send_message(admin_message)
+            logger.info("Monthly partner backup summary emailed to Super Admin %s for %s", smtp_username, backup_month)
     except Exception:
         db.rollback()
         logger.exception("Monthly partner backup scheduler failed")
