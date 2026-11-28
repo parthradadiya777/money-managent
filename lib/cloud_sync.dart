@@ -102,6 +102,18 @@ class CloudSyncService {
     }
   }
 
+  Future<Map<String, dynamic>> sendPartnerBackupTest(String tenantId) async {
+    final response = await http.post(
+      _uri('/api/admin/partners/$tenantId/backup-test'),
+      headers: _headers,
+    );
+    final data = _decode(response);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(data['detail'] ?? 'Could not send test backup email');
+    }
+    return data;
+  }
+
   Future<void> resetPartnerPassword(String tenantId, String newPassword) async {
     final response = await http.post(
       _uri('/api/admin/partners/$tenantId/reset-password'),
