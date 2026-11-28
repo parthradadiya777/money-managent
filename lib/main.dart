@@ -53,9 +53,9 @@ const Map<String,List<String>> fields = {
  'Daily Orders':['Date','Platform','Firm / Account','Order ID','SKU / Product','Brand','Size','Color','Orders Qty','Gross Order Value','Delivered Qty','Delivered Sales','Commission / Fees','Shipping Fees','Other Deductions','Courier','AWB / Tracking No.','Customer','Pincode','Source PDF','PDF Page'],
  'Returns & RTO':['Date','Platform','RTO / Return','Details'],
  'Vendor Payments':['Month','Firm Name','Vendor Name','Opening Balance','New Amount','Closing Balance','Amount Paid','Payment Date','Payment Mode','Notes'],
- 'Bank Received':['Date','Platform','Amount','Details','Brand'],
- 'Expenses':['Date','Expense','Details','Payment Mode'],
- 'Vendor Payment Transactions':['Date','Firm Name','Vendor Name','Amount','Payment Mode','Notes'],
+ 'Bank Received':['Date','Platform','Account Name','Amount','Details','Brand'],
+ 'Expenses':['Date','Payment Account','Expense','Details','Payment Mode'],
+ 'Vendor Payment Transactions':['Date','Firm Name','Vendor Name','Payment Account','Amount','Payment Mode','Notes'],
  'Opening Balances':['Date','Account Type','Account Name','Opening Balance','Notes'],
 };
 
@@ -667,6 +667,22 @@ class _BusinessHomeState extends State<BusinessHome> {
    final o=_periodRows('Daily Orders'),ret=_periodRows('Returns & RTO'),v=_periodRows('Vendor Payments'),b=_periodRows('Bank Received'),e=_periodRows('Expenses'),p=_periodRows('Vendor Payment Transactions');
    final sales=_total(o,'Delivered Sales'),fees=_total(o,'Commission / Fees')+_total(o,'Shipping Fees')+_total(o,'Other Deductions'),expenses=_total(e,'Expense'),bank=_total(b,'Amount'),paid=_total(p,'Amount'),purchase=_total(v,'New Amount'),opening=_cashOpeningBalance();
    final returns=_returnQty(ret,'Return'),rto=_returnQty(ret,'RTO'),orders=_total(o,'Orders Qty'),delivered=(orders-returns-rto).clamp(0,double.infinity);
+   final accountLedgers=calculateAccountLedgers(
+    openingBalances:rows('Opening Balances'),
+    bankReceipts:rows('Bank Received'),
+    vendorPayments:rows('Vendor Payment Transactions'),
+    expenses:rows('Expenses'),
+    periodStart:_periodStart(),
+    periodEndExclusive:_periodEndExclusive(),
+   );
+   final accountRows=<Widget>[for(final ledger in accountLedgers)
+    Padding(padding:const EdgeInsets.symmetric(vertical:7),child:Column(children:[
+     Row(children:[Expanded(child:Text('${ledger['Account Name']}',style:const TextStyle(fontWeight:FontWeight.w700))),Text(money(ledger['Closing Balance'] as num),style:const TextStyle(fontWeight:FontWeight.bold))]),
+     const SizedBox(height:3),
+     Row(children:[Expanded(child:Text('Opening ${money(ledger['Opening Balance'] as num)}',style:const TextStyle(fontSize:10,color:Colors.black54))),Expanded(child:Text('+ In ${money(ledger['Receipts'] as num)}',style:const TextStyle(fontSize:10,color:Colors.black54))),Expanded(child:Text('- Out ${money((ledger['Vendor Payments'] as num)+(ledger['Expenses'] as num))}',style:const TextStyle(fontSize:10,color:Colors.black54)))]),
+    ])),
+   ];
+
    Widget line(String k,num n)=>Padding(padding:const EdgeInsets.symmetric(vertical:7),child:Row(children:[Expanded(child:Text(k,style:const TextStyle(fontSize:13))),Text(money(n),style:const TextStyle(fontWeight:FontWeight.w700,fontSize:13))]));
    Widget panel(String title,IconData icon,List<Widget> children)=>Card(elevation:0,color:Colors.white,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(16),side:const BorderSide(color:Color(0xFFE9E5DC))),child:Padding(padding:const EdgeInsets.all(18),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Row(children:[Icon(icon,color:const Color(0xFFB88919)),const SizedBox(width:9),Text(title,style:const TextStyle(fontSize:14,fontWeight:FontWeight.bold,letterSpacing:.3))]),const Divider(height:24),...children])));
    final marketplace=<Widget>[];
@@ -686,6 +702,9 @@ class _BusinessHomeState extends State<BusinessHome> {
     panel('PROFIT & LOSS SUMMARY',Icons.account_balance_wallet,[line('Delivered Sales Revenue',sales),line('Marketplace Fees & Deductions',fees),line('Operating Expenses',expenses),const Divider(height:18),line('Operating Result before inventory cost',sales-fees-expenses),line('Vendor Purchases (shown separately)',purchase),const Text('Inventory opening/closing value is not yet recorded. Vendor purchases are shown separately and not treated as Cost of Goods Sold to avoid overstating profit.',style:TextStyle(color:Colors.deepOrange,fontSize:11,height:1.4))]),
     const SizedBox(height:14),
     panel('CASH FLOW & VENDOR PAYMENTS',Icons.payments,[line('Opening Cash / Bank Balance',opening),line('Bank Receipts Recorded',bank),line('Vendor Payments Made',paid),line('Operating Expenses',expenses),const Divider(height:18),line('Net Tracked Cash Movement',bank-paid-expenses),line('Estimated Closing Cash / Bank',opening+bank-paid-expenses),Text('Opening balance includes prior recorded movements before this period. ${p.length} vendor payment transactions • ${b.length} bank receipts • ${e.length} expense records',style:const TextStyle(fontSize:11,color:Colors.black54))]),
+    const SizedBox(height:14),
+    panel('ACCOUNT-WISE CASH / BANK RECONCILIATION',Icons.account_balance,accountRows.isEmpty?[const Text('Add Opening Balances and select Account Name on every receipt/payment/expense to see separate ledgers.',style:TextStyle(fontSize:12,color:Colors.black54))]:accountRows),
+
     const SizedBox(height:14),
     panel('BALANCE SHEET CHECKLIST',Icons.account_balance,[line('Opening Cash / Bank entered',opening),const Text('Opening balances are entered separately by Cash or Bank account. Inventory, receivables, loans and owner capital still need their own records before a complete balance sheet can be prepared.',style:TextStyle(fontSize:12,color:Colors.black54,height:1.5))])
    ]);
@@ -1405,6 +1424,10 @@ class _BusinessHomeState extends State<BusinessHome> {
   if (normalized == 'type' || normalized == 'rto / return') return ['Return', 'RTO'];
   if (normalized == 'status') return ['Pending', 'Completed', 'On Hold', 'Cancelled'];
   if (normalized.contains('payment mode')) return ['Bank Transfer', 'UPI', 'Cash', 'Cheque', 'Credit', 'Other'];
+  if (normalized == 'payment account' || normalized == 'account name') {
+    final names=rows('Opening Balances').map((r)=>'${r['Account Name']??''}'.trim()).where((v)=>v.isNotEmpty).toSet().toList();
+    return names..sort();
+  }
   if (normalized == 'record type') return ['Firm', 'Platform', 'Vendor', 'Bank Account', 'Expense Category'];
   if (normalized == 'account type') return ['Cash', 'Bank'];
   if (normalized == 'state') return ['Gujarat', 'Maharashtra', 'Rajasthan', 'Delhi', 'Karnataka', 'Other'];
