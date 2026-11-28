@@ -16,7 +16,7 @@ class LoginIn(BaseModel):
 class PartnerCreateIn(BaseModel):
     name: str = Field(min_length=2, max_length=180)
     login_id: EmailStr
-    password: str = Field(min_length=12, max_length=128)
+    password: str = Field(min_length=8, max_length=128)
 
 
 class PartnerUpdateIn(BaseModel):
@@ -26,7 +26,7 @@ class PartnerUpdateIn(BaseModel):
 
 
 class PasswordResetIn(BaseModel):
-    new_password: str = Field(min_length=12, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
 
 
 class PasswordChangeIn(BaseModel):
