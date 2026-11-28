@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from .config import settings
 from .database import Base, engine, get_db
 from .models import Tenant, User, Partner, BusinessRecord, AuditLog, AdminAccessLog, UserSecurity, PartnerBackupDelivery
-from .partner_backup import start_backup_scheduler, stop_backup_scheduler
+from .partner_backup import start_backup_scheduler, stop_backup_scheduler, send_partner_backup_test
 from .schemas import RegisterIn, LoginIn, PartnerCreateIn, PartnerUpdateIn, PasswordResetIn, PasswordChangeIn, RecordIn, RecordBatchIn
 from .security import hash_password, verify_password, create_access_token, decode_access_token
 
@@ -342,6 +342,34 @@ def access_partner(tenant_id: UUID, admin: Principal = Depends(require_admin), d
     # The token retains the admin as its subject; only the effective tenant changes.
     token = create_access_token(str(admin.id), str(tenant_id), expires_minutes=30, impersonating=True)
     return {"access_token": token, "token_type": "bearer", "tenant_id": str(tenant_id), "partner_name": tenant.name, "role": "super_admin", "expires_in": 1800}
+
+
+@app.post("/api/admin/partners/{tenant_id}/backup-test")
+def send_partner_backup_test_email(
+    tenant_id: UUID,
+    admin: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Send a one-time TEST backup to this partner's login/registered email."""
+    partner = _partner_for_tenant(db, tenant_id)
+    tenant = db.get(Tenant, tenant_id)
+    user = db.scalar(select(User).where(User.tenant_id == tenant_id, User.role == "partner"))
+    if not partner or not tenant or not user:
+        raise HTTPException(status_code=404, detail="Partner or registered email not found")
+    if partner.status != "active":
+        raise HTTPException(status_code=409, detail="Partner is not active")
+    try:
+        result = send_partner_backup_test(db, partner, tenant, user)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=413, detail=str(exc))
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=502, detail="Test backup email failed. Check API logs for details.")
+    _write_admin_log(db, admin.id, tenant_id, "partner_backup_test_sent", f"Test backup sent to {user.email}; records={result['records_count']}")
+    db.commit()
+    return {"ok": True, "message": "Test backup email accepted by Gmail SMTP", **result}
 
 
 @app.get("/api/admin/audit-logs")
