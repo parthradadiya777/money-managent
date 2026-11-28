@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     app_env: str = "production"
     superadmin_email: str | None = None
     superadmin_password: str | None = None
+    superadmin_force_password_reset: bool = False
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
