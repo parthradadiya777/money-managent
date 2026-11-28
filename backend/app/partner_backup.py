@@ -318,8 +318,47 @@ def run_monthly_partner_backups():
                 "Per-partner status (metadata and counts only; no partner records attached):\\n"
                 + ("\\n".join(summary_rows) if summary_rows else "No partner details.")
             )
-            smtp.send_message(admin_message)
-            logger.info("Monthly partner backup summary emailed to Super Admin %s for %s", smtp_username, backup_month)
+            # Super Admin receives a separate PDF summary for every active partner.
+            # These PDFs contain counts only; no individual orders or activity-log rows.
+            admin_pdf_total = 0
+            for partner, tenant, user in partners:
+                records = db.scalars(select(BusinessRecord).where(
+                    BusinessRecord.tenant_id == tenant.id
+                ).order_by(BusinessRecord.module, BusinessRecord.record_id)).all()
+                audit_logs = db.scalars(select(AuditLog).where(
+                    AuditLog.tenant_id == tenant.id
+                ).order_by(AuditLog.created_at)).all()
+                export = {
+                    "backup_month": backup_month,
+                    "generated_at": datetime.now(IST).isoformat(),
+                    "partner": {
+                        "business_name": tenant.name,
+                        "partner_code": partner.code,
+                        "registered_email": user.email,
+                        "status": partner.status,
+                        "tenant_id": str(tenant.id),
+                    },
+                    "records": [{"record_id": row.record_id, "module": row.module, "payload": row.payload}
+                                for row in records],
+                    "activity_logs": [{"action": row.action, "module": row.module, "record_id": row.record_id}
+                                      for row in audit_logs],
+                }
+                pdf_data = _build_summary_pdf(export)
+                admin_pdf_total += len(pdf_data)
+                if admin_pdf_total > MAX_ATTACHMENT_BYTES:
+                    logger.error("Combined Super Admin partner PDFs exceed email attachment limit for %s", backup_month)
+                    break
+                safe_code = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in str(partner.code))
+                admin_message.add_attachment(
+                    pdf_data, maintype="application", subtype="pdf",
+                    filename=f"Digitechified_{safe_code}_Backup_Summary_{backup_month}.pdf",
+                )
+            if admin_pdf_total <= MAX_ATTACHMENT_BYTES:
+                smtp.send_message(admin_message)
+                logger.info("Monthly partner backup summary and %s partner PDFs emailed to Super Admin %s for %s",
+                            len(partners), smtp_username, backup_month)
+            else:
+                logger.error("Super Admin email not sent: partner PDF attachments exceed 20 MB")
     except Exception:
         db.rollback()
         logger.exception("Monthly partner backup scheduler failed")
