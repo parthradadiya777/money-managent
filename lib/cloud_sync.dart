@@ -75,6 +75,19 @@ class CloudSyncService {
         .toList();
   }
 
+  Future<List<Map<String, dynamic>>> fetchPartnerActivity({String? tenantId, int limit = 300}) async {
+    final query = <String, String>{'limit': '$limit'};
+    if (tenantId != null && tenantId.isNotEmpty) query['tenant_id'] = tenantId;
+    final response = await http.get(_uri('/api/admin/partner-activity').replace(queryParameters: query), headers: _headers);
+    final data = _decode(response);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(data['detail'] ?? 'Could not load partner activity');
+    }
+    return (data['activities'] as List? ?? [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
   Future<Map<String, dynamic>> createPartner({
     required String name, required String loginId, required String password,
   }) async {
