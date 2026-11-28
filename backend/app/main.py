@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from .config import settings
 from .database import Base, engine, get_db
 from .models import Tenant, User, Partner, BusinessRecord, AuditLog, AdminAccessLog, UserSecurity
-from .schemas import RegisterIn, LoginIn, PartnerCreateIn, PartnerUpdateIn, PasswordResetIn, RecordIn, RecordBatchIn
+from .schemas import RegisterIn, LoginIn, PartnerCreateIn, PartnerUpdateIn, PasswordResetIn, PasswordChangeIn, RecordIn, RecordBatchIn
 from .security import hash_password, verify_password, create_access_token, decode_access_token
 
 Base.metadata.create_all(bind=engine)
@@ -168,6 +168,30 @@ def login(data: LoginIn, db: Session = Depends(get_db)):
         "login_id": user.email,
         "tenant_id": str(user.tenant_id),
     }
+
+
+@app.post("/api/auth/change-password")
+def change_own_password(
+    data: PasswordChangeIn,
+    admin: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Allow the authenticated Super Admin to rotate their own password."""
+    user = db.get(User, admin.id)
+    if not user or not verify_password(data.current_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    if data.current_password == data.new_password:
+        raise HTTPException(status_code=400, detail="New password must be different")
+    user.password_hash = hash_password(data.new_password)
+    security_state = db.get(UserSecurity, user.id)
+    reset_at = datetime.now(timezone.utc)
+    if security_state:
+        security_state.tokens_valid_after = reset_at
+    else:
+        db.add(UserSecurity(user_id=user.id, tokens_valid_after=reset_at))
+    _write_admin_log(db, admin.id, admin.tenant_id, "admin_password_changed", "Super Admin changed own password")
+    db.commit()
+    return {"ok": True, "message": "Password updated. Please log in again."}
 
 
 @app.get("/api/auth/me")
