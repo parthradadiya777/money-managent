@@ -34,6 +34,140 @@ def _json_default(value):
     return str(value)
 
 
+def _build_summary_pdf(export):
+    """Create a compact, professional PDF containing counts only (no order rows)."""
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from collections import Counter
+
+    partner_data = export.get("partner", {})
+    records = export.get("records", [])
+    logs = export.get("activity_logs", [])
+    module_counts = Counter(str(row.get("module") or "Uncategorized") for row in records)
+    daily_order_count = sum(
+        count for module, count in module_counts.items()
+        if "daily" in module.lower() and "order" in module.lower()
+    )
+
+    buffer = io.BytesIO()
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(
+        name="DBMTitle", parent=styles["Title"], fontName="Helvetica-Bold",
+        fontSize=20, leading=24, alignment=TA_CENTER,
+        textColor=colors.HexColor("#183153"), spaceAfter=3,
+    ))
+    styles.add(ParagraphStyle(
+        name="DBMSub", parent=styles["Normal"], fontSize=9, leading=12,
+        alignment=TA_CENTER, textColor=colors.HexColor("#667085"), spaceAfter=15,
+    ))
+    styles.add(ParagraphStyle(
+        name="DBMSection", parent=styles["Heading2"], fontSize=11, leading=14,
+        textColor=colors.HexColor("#A87912"), spaceBefore=12, spaceAfter=7,
+    ))
+    styles.add(ParagraphStyle(name="DBMCell", parent=styles["BodyText"], fontSize=8, leading=10))
+    styles.add(ParagraphStyle(
+        name="DBMKpiLabel", parent=styles["BodyText"], fontSize=7, leading=9,
+        alignment=TA_CENTER, textColor=colors.HexColor("#667085"),
+    ))
+    styles.add(ParagraphStyle(
+        name="DBMKpiValue", parent=styles["BodyText"], fontName="Helvetica-Bold",
+        fontSize=18, leading=22, alignment=TA_CENTER, textColor=colors.HexColor("#183153"),
+    ))
+    styles.add(ParagraphStyle(
+        name="DBMNote", parent=styles["BodyText"], fontSize=8, leading=11,
+        textColor=colors.HexColor("#667085"),
+    ))
+
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4, rightMargin=17*mm, leftMargin=17*mm,
+        topMargin=16*mm, bottomMargin=18*mm,
+    )
+    story = [
+        Paragraph("DIGITECHIFIED", styles["DBMTitle"]),
+        Paragraph(f"PARTNER BACKUP SUMMARY  |  {export.get('backup_month', '')}", styles["DBMSub"]),
+    ]
+    info = [
+        [Paragraph("<b>Partner</b>", styles["DBMCell"]), Paragraph(str(partner_data.get("business_name", "—")), styles["DBMCell"])],
+        [Paragraph("<b>Registered Email</b>", styles["DBMCell"]), Paragraph(str(partner_data.get("registered_email", "—")), styles["DBMCell"])],
+        [Paragraph("<b>Partner Code</b>", styles["DBMCell"]), Paragraph(str(partner_data.get("partner_code", "—")), styles["DBMCell"])],
+        [Paragraph("<b>Account Status</b>", styles["DBMCell"]), Paragraph(str(partner_data.get("status", "—")).title(), styles["DBMCell"])],
+        [Paragraph("<b>Generated</b>", styles["DBMCell"]), Paragraph(str(export.get("generated_at", "—")), styles["DBMCell"])],
+    ]
+    info_table = Table(info, colWidths=[42*mm, 130*mm])
+    info_table.setStyle(TableStyle([
+        ("BACKGROUND",(0,0),(0,-1),colors.HexColor("#F4F0E7")),
+        ("BACKGROUND",(1,0),(1,-1),colors.HexColor("#FBFAF7")),
+        ("BOX",(0,0),(-1,-1),0.6,colors.HexColor("#E3DED2")),
+        ("INNERGRID",(0,0),(-1,-1),0.35,colors.HexColor("#E3DED2")),
+        ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+        ("LEFTPADDING",(0,0),(-1,-1),9),("RIGHTPADDING",(0,0),(-1,-1),9),
+        ("TOPPADDING",(0,0),(-1,-1),7),("BOTTOMPADDING",(0,0),(-1,-1),7),
+    ]))
+    story += [info_table, Paragraph("BACKUP AT A GLANCE", styles["DBMSection"])]
+    kpi = Table([
+        [Paragraph("TOTAL BUSINESS RECORDS", styles["DBMKpiLabel"]),
+         Paragraph("DAILY ORDER RECORDS", styles["DBMKpiLabel"]),
+         Paragraph("ACTIVITY LOG COUNT", styles["DBMKpiLabel"])],
+        [Paragraph(str(len(records)), styles["DBMKpiValue"]),
+         Paragraph(str(daily_order_count), styles["DBMKpiValue"]),
+         Paragraph(str(len(logs)), styles["DBMKpiValue"])],
+    ], colWidths=[57.3*mm]*3, rowHeights=[10*mm, 15*mm])
+    kpi.setStyle(TableStyle([
+        ("BACKGROUND",(0,0),(-1,-1),colors.HexColor("#F7F8FA")),
+        ("BOX",(0,0),(-1,-1),0.6,colors.HexColor("#E3E7ED")),
+        ("INNERGRID",(0,0),(-1,-1),0.6,colors.HexColor("#E3E7ED")),
+        ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+        ("LEFTPADDING",(0,0),(-1,-1),5),("RIGHTPADDING",(0,0),(-1,-1),5),
+    ]))
+    story += [kpi, Paragraph("RECORDS BY MODULE", styles["DBMSection"])]
+    if module_counts:
+        rows = [[Paragraph("<b>Module</b>", styles["DBMCell"]), Paragraph("<b>Record Count</b>", styles["DBMCell"])]]
+        rows.extend([
+            [Paragraph(module, styles["DBMCell"]), Paragraph(str(count), styles["DBMCell"])]
+            for module, count in sorted(module_counts.items())
+        ])
+        rows.append([Paragraph("<b>Total</b>", styles["DBMCell"]), Paragraph(f"<b>{len(records)}</b>", styles["DBMCell"])])
+        table = Table(rows, colWidths=[125*mm, 47*mm], repeatRows=1)
+        table.setStyle(TableStyle([
+            ("BACKGROUND",(0,0),(-1,0),colors.HexColor("#183153")),
+            ("TEXTCOLOR",(0,0),(-1,0),colors.white),
+            ("BACKGROUND",(0,-1),(-1,-1),colors.HexColor("#F4F0E7")),
+            ("GRID",(0,0),(-1,-1),0.4,colors.HexColor("#E1E5EA")),
+            ("ALIGN",(1,1),(1,-1),"RIGHT"),("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+            ("LEFTPADDING",(0,0),(-1,-1),9),("RIGHTPADDING",(0,0),(-1,-1),9),
+            ("TOPPADDING",(0,0),(-1,-1),7),("BOTTOMPADDING",(0,0),(-1,-1),7),
+        ]))
+        story.append(table)
+    story += [
+        Paragraph("PRIVACY &amp; SCOPE", styles["DBMSection"]),
+        Paragraph(
+            "This PDF contains summary counts only. Individual order entries and individual activity-log entries are not printed. "
+            "The attached ZIP remains the detailed partner data archive.",
+            styles["DBMNote",
+        ),
+        Spacer(1, 16),
+        Paragraph("CONFIDENTIAL  •  PARTNER-SPECIFIC BACKUP  •  DIGITECHIFIED BUSINESS MANAGER", styles["DBMSub"]),
+    ]
+
+    def footer(canvas, doc):
+        canvas.saveState()
+        width, _ = A4
+        canvas.setStrokeColor(colors.HexColor("#E3E7ED"))
+        canvas.line(17*mm, 12*mm, width-17*mm, 12*mm)
+        canvas.setFont("Helvetica", 7)
+        canvas.setFillColor(colors.HexColor("#7A8493"))
+        canvas.drawString(17*mm, 7*mm, "DIGITECHIFIED  |  CONFIDENTIAL")
+        canvas.drawRightString(width-17*mm, 7*mm, f"Page {doc.page}")
+        canvas.restoreState()
+
+    doc.build(story, onFirstPage=footer, onLaterPages=footer)
+    return buffer.getvalue()
+
+
 def _send_partner_backup(db, partner, tenant, user, backup_month, smtp):
     existing = db.scalar(select(PartnerBackupDelivery).where(
         PartnerBackupDelivery.tenant_id == tenant.id,
@@ -91,7 +225,8 @@ def _send_partner_backup(db, partner, tenant, user, backup_month, smtp):
             "login passwords, password hashes, tokens, or other partners' data.\n",
         )
     attachment = buffer.getvalue()
-    if len(attachment) > MAX_ATTACHMENT_BYTES:
+    pdf_attachment = _build_summary_pdf(export)
+    if len(attachment) + len(pdf_attachment) > MAX_ATTACHMENT_BYTES:
         logger.error(
             "Partner backup too large for email; partner=%s month=%s bytes=%s",
             tenant.id, backup_month, len(attachment),
@@ -114,6 +249,12 @@ def _send_partner_backup(db, partner, tenant, user, backup_month, smtp):
         maintype="application",
         subtype="zip",
         filename=f"Digitechified_Backup_{backup_month}.zip",
+    )
+    message.add_attachment(
+        pdf_attachment,
+        maintype="application",
+        subtype="pdf",
+        filename=f"Digitechified_Backup_Summary_{backup_month}.pdf",
     )
     smtp.send_message(message)
 
