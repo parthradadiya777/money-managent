@@ -68,6 +68,7 @@ def _build_summary_pdf(export):
         textColor=colors.HexColor("#A87912"), spaceBefore=12, spaceAfter=7,
     ))
     styles.add(ParagraphStyle(name="DBMCell", parent=styles["BodyText"], fontSize=8, leading=10))
+    styles.add(ParagraphStyle(name="DBMHeader", parent=styles["BodyText"], fontName="Helvetica-Bold", fontSize=8, leading=10, textColor=colors.white))
     styles.add(ParagraphStyle(
         name="DBMKpiLabel", parent=styles["BodyText"], fontSize=7, leading=9,
         alignment=TA_CENTER, textColor=colors.HexColor("#667085"),
@@ -124,7 +125,7 @@ def _build_summary_pdf(export):
     ]))
     story += [kpi, Paragraph("RECORDS BY MODULE", styles["DBMSection"])]
     if module_counts:
-        rows = [[Paragraph("<b>Module</b>", styles["DBMCell"]), Paragraph("<b>Record Count</b>", styles["DBMCell"])]]
+        rows = [[Paragraph("Module", styles["DBMHeader"]), Paragraph("Record Count", styles["DBMHeader"])]]
         rows.extend([
             [Paragraph(module, styles["DBMCell"]), Paragraph(str(count), styles["DBMCell"])]
             for module, count in sorted(module_counts.items())
@@ -225,7 +226,7 @@ def _send_partner_backup(db, partner, tenant, user, backup_month, smtp):
     message.set_content(
         f"Hello {tenant.name},\n\n"
         f"Attached is your Digitechified Business Manager data backup for {backup_month}.\n"
-        "This ZIP contains only your business workspace data. Please keep it in a safe place.\n\n"
+        "This PDF contains your partner-specific backup summary and module-wise record counts. Please keep it in a safe place.\n\n"
         "Regards,\nDigitechified"
     )
     message.add_attachment(
@@ -353,7 +354,7 @@ def stop_backup_scheduler():
 
 
 def send_partner_backup_test(db, partner, tenant, user):
-    """Send a one-off test ZIP to one partner without writing monthly delivery markers."""
+    """Send a one-off PDF backup summary to one partner without monthly delivery markers."""
     smtp_username = os.getenv("BACKUP_SMTP_USERNAME", "").strip()
     smtp_password = os.getenv("BACKUP_SMTP_APP_PASSWORD", "").strip()
     if not smtp_username or not smtp_password:
@@ -399,10 +400,10 @@ def send_partner_backup_test(db, partner, tenant, user):
     message["From"] = smtp_username
     message["To"] = user.email
     message.set_content(
-        f"Hello {tenant.name},\\n\\n"
-        "This is a TEST backup email from Digitechified Business Manager.\\n"
-        "Attached is the partner-specific PDF backup summary with record counts and module-wise details.\\n\\n"
-        "Regards,\\nDigitechified"
+        f"Hello {tenant.name},\n\n"
+        "This is a TEST backup email from Digitechified Business Manager.\n"
+        "Attached is the partner-specific PDF backup summary with record counts and module-wise details.\n\n"
+        "Regards,\nDigitechified"
     )
     message.add_attachment(
         pdf_attachment, maintype="application", subtype="pdf",
