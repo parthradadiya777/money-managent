@@ -253,6 +253,67 @@ class _AdminHomeState extends State<AdminHome> {
     finally { if (mounted) setState(() => loading = false); }
   }
 
+  Future<void> _showPartnerActivity() async {
+    try {
+      final activities = await api.fetchPartnerActivity(limit: 500);
+      if (!mounted) return;
+      String selectedTenant = '';
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => StatefulBuilder(builder: (ctx, setDialogState) {
+          final filtered = selectedTenant.isEmpty
+              ? activities
+              : activities.where((a) => a['tenant_id'] == selectedTenant).toList();
+          return AlertDialog(
+            title: const Text('Partner Activity History'),
+            content: SizedBox(
+              width: 760, height: 560,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                DropdownButtonFormField<String>(
+                  value: selectedTenant,
+                  decoration: const InputDecoration(labelText: 'Filter by Partner'),
+                  items: [
+                    const DropdownMenuItem(value: '', child: Text('All Partners')),
+                    ...partners.map((p) => DropdownMenuItem(
+                      value: '${p['tenant_id']}', child: Text('${p['name']}'),
+                    )),
+                  ],
+                  onChanged: (v) => setDialogState(() => selectedTenant = v ?? ''),
+                ),
+                const SizedBox(height: 12),
+                Expanded(child: filtered.isEmpty
+                  ? const Center(child: Text('No activity recorded yet.'))
+                  : ListView.separated(
+                    itemCount: filtered.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (_, i) {
+                      final a = filtered[i];
+                      final dt = DateTime.tryParse('${a['created_at'] ?? ''}')?.toLocal();
+                      final when = dt == null ? '' : '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}  ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+                      return ListTile(
+                        dense: true,
+                        leading: const CircleAvatar(child: Icon(Icons.history, size: 18)),
+                        title: Text('${a['partner_name'] ?? 'Partner'} • ${a['action'] ?? ''}'.toUpperCase(),
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+                        subtitle: Text('${a['module'] ?? ''}  |  ${a['record_id'] ?? ''}\\n${a['login_id'] ?? ''}  •  $when'),
+                        isThreeLine: true,
+                      );
+                    },
+                  ),
+                ),
+              ]),
+            ),
+            actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
+          );
+        }),
+      );
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    }
+  }
+
   Future<void> _createPartner() async {
     final name = TextEditingController();
     final login = TextEditingController();
@@ -390,6 +451,8 @@ class _AdminHomeState extends State<AdminHome> {
             Text('Partner Management', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF17233D))),
             Text('Create and control independent partner workspaces', style: TextStyle(color: Colors.black54, fontSize: 12)),
           ])),
+          OutlinedButton.icon(onPressed: _showPartnerActivity, icon: const Icon(Icons.history), label: const Text('Partner Activity')),
+          const SizedBox(width: 8),
           FilledButton.icon(onPressed: _createPartner, icon: const Icon(Icons.add), label: const Text('Add Partner')),
         ]),
         const SizedBox(height: 18),
