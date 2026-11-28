@@ -69,6 +69,21 @@ def initialize_partner_workspace():
                     role="super_admin",
                 )
                 db.add(admin)
+            elif settings.superadmin_force_password_reset and admin.role == "super_admin":
+                # Explicit, temporary recovery switch. Disable it in Render after login is restored.
+                admin.password_hash = hash_password(settings.superadmin_password)
+                reset_at = datetime.now(timezone.utc)
+                security_state = db.get(UserSecurity, admin.id)
+                if security_state:
+                    security_state.tokens_valid_after = reset_at
+                else:
+                    db.add(UserSecurity(user_id=admin.id, tokens_valid_after=reset_at))
+                db.add(AdminAccessLog(
+                    admin_user_id=admin.id,
+                    tenant_id=admin.tenant_id,
+                    action="admin_password_recovered",
+                    details="Super Admin password synchronized from Render environment",
+                ))
         db.commit()
     finally:
         db.close()
