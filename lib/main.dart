@@ -596,7 +596,7 @@ class _BusinessHomeState extends State<BusinessHome> {
   const Padding(padding:EdgeInsets.fromLTRB(20,28,16,24),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
    BrandMark(size:46),SizedBox(height:12),
    Text('DIGITECHIFIED',style:TextStyle(color:Colors.white,fontWeight:FontWeight.bold,letterSpacing:1.2)),
-   Text('Business Manager',style:TextStyle(color:Color(0xFFB9B9B9),fontSize:12)),
+   Text('Partner Admin Portal',style:TextStyle(color:Color(0xFFB9B9B9),fontSize:12)),
   ])),
   const Divider(color:Color(0xFF333333)),
   Expanded(child:ListView.builder(itemCount:8,itemBuilder:(c,index){
@@ -614,8 +614,10 @@ class _BusinessHomeState extends State<BusinessHome> {
   const SizedBox(width:8),Expanded(child:Text(selected==0?'Business Overview':_moduleTitle(modules[selected]),style:const TextStyle(fontSize:19,fontWeight:FontWeight.bold,color:Color(0xFF17233D)))),
   Chip(avatar:Icon(Icons.circle,size:9,color:_syncMessage=='Cloud synced'?Colors.green:Colors.orange),
    label:Text(Hive.box(hiveBoxName).get('cloudAdminPartnerName') != null
-    ? 'Admin Mode • ${Hive.box(hiveBoxName).get('cloudAdminPartnerName')}'
-    : (_syncMessage ?? (box.get('cloudToken') != null ? 'Cloud sync' : 'Local data')))),
+    ? 'Super Admin • ${Hive.box(hiveBoxName).get('cloudAdminPartnerName')}'
+    : (Hive.box(hiveBoxName).get('cloudRole') == 'partner'
+      ? 'Partner Admin'
+      : (_syncMessage ?? (box.get('cloudToken') != null ? 'Cloud sync' : 'Local data'))))),
   if (CloudSyncService.configured && box.get('cloudToken') != null)
    IconButton(tooltip:'Sync now', onPressed:_syncOnStart, icon:const Icon(Icons.sync)),
   if (Hive.box(hiveBoxName).get('cloudAdminToken') != null)
