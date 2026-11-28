@@ -147,7 +147,7 @@ def _build_summary_pdf(export):
         Paragraph(
             "This PDF contains summary counts only. Individual order entries and individual activity-log entries are not printed. "
             "The attached ZIP remains the detailed partner data archive.",
-            styles["DBMNote",
+            styles["DBMNote"],
         ),
         Spacer(1, 16),
         Paragraph("CONFIDENTIAL  •  PARTNER-SPECIFIC BACKUP  •  DIGITECHIFIED BUSINESS MANAGER", styles["DBMSub"]),
